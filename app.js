@@ -451,7 +451,10 @@ function bindEvents() {
   });
 
   els.navButtons.forEach((button) => {
-    button.addEventListener("click", () => showView(button.dataset.view));
+    button.addEventListener("click", () => {
+      if (button.dataset.view === "entryView") resetEntryForm(toDateKey(new Date()));
+      showView(button.dataset.view);
+    });
   });
 
   document.querySelectorAll("[data-entry-type]").forEach((button) => {
