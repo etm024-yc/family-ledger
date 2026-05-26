@@ -58,7 +58,7 @@ const defaultTemplates = [
 
 const palette = ["#217c57", "#c94343", "#2868c7", "#8a5a27", "#d8a51d", "#6f5bc7", "#008891", "#c15b8a"];
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-const budgetBuckets = ["생활비", "식비", "경진용돈", "영철용돈", "경조사비"];
+const defaultBudgetBuckets = ["생활비", "식비", "경진용돈", "영철용돈", "경조사비"];
 const defaultUsers = ["영철", "경진"];
 const legacyUserMap = {
   "나": "영철",
@@ -223,6 +223,8 @@ const els = {
   fixedHolidayRule: document.querySelector("#fixedHolidayRule"),
   resetFixed: document.querySelector("#resetFixed"),
   fixedList: document.querySelector("#fixedList"),
+  budgetBucketForm: document.querySelector("#budgetBucketForm"),
+  budgetBucketName: document.querySelector("#budgetBucketName"),
   monthlyBudgetForm: document.querySelector("#monthlyBudgetForm"),
   monthlyBudgetList: document.querySelector("#monthlyBudgetList"),
   budgetMonthCaption: document.querySelector("#budgetMonthCaption"),
@@ -309,13 +311,15 @@ function loadCurrentUser() {
 
 function normalizeState(raw) {
   const normalizedUsers = normalizeUsers(raw.users);
+  const normalizedBudgetBuckets = normalizeBudgetBuckets(raw.budgetBuckets, raw.monthlyBudgets, raw.entries, raw.templates);
   return {
     users: normalizedUsers,
+    budgetBuckets: normalizedBudgetBuckets,
     categories: normalizeCategories(raw.categories),
-    entries: (raw.entries || []).map((entry) => normalizeEntry(entry, normalizedUsers)).filter(Boolean),
+    entries: (raw.entries || []).map((entry) => normalizeEntry(entry, normalizedUsers, normalizedBudgetBuckets)).filter(Boolean),
     cards: raw.cards?.length ? raw.cards.map((card) => normalizeCard(card, normalizedUsers)) : clone(defaultCards).map((card) => normalizeCard(card, normalizedUsers)),
-    templates: raw.templates?.length ? raw.templates.map((template) => normalizeTemplate(template, normalizedUsers)) : clone(defaultTemplates).map((template) => normalizeTemplate(template, normalizedUsers)),
-    monthlyBudgets: normalizeMonthlyBudgets(raw.monthlyBudgets),
+    templates: raw.templates?.length ? raw.templates.map((template) => normalizeTemplate(template, normalizedUsers, normalizedBudgetBuckets)) : clone(defaultTemplates).map((template) => normalizeTemplate(template, normalizedUsers, normalizedBudgetBuckets)),
+    monthlyBudgets: normalizeMonthlyBudgets(raw.monthlyBudgets, normalizedBudgetBuckets),
     updatedAt: raw.updatedAt || ""
   };
 }
@@ -344,7 +348,22 @@ function mergeCategoryMaps(base, extra) {
   return merged;
 }
 
-function normalizeEntry(entry, userList = getUsers()) {
+function normalizeBudgetBuckets(rawBuckets, monthlyBudgets = {}, entries = [], templates = []) {
+  if (Array.isArray(rawBuckets)) {
+    return unique(rawBuckets.map((bucket) => String(bucket || "").trim()).filter(Boolean));
+  }
+
+  const discovered = [];
+  Object.values(monthlyBudgets || {}).forEach((values) => {
+    discovered.push(...Object.keys(values || {}));
+  });
+  [...(entries || []), ...(templates || [])].forEach((item) => {
+    if (item?.budget) discovered.push(item.budget);
+  });
+  return unique([...defaultBudgetBuckets, ...discovered].map((bucket) => String(bucket || "").trim()).filter(Boolean));
+}
+
+function normalizeEntry(entry, userList = getUsers(), bucketList = getBudgetBuckets()) {
   if (!entry || !entry.date) return null;
   const type = entry.type === "fixed" ? "fixed-expense" : entry.type;
   return {
@@ -352,27 +371,27 @@ function normalizeEntry(entry, userList = getUsers()) {
     id: entry.id || makeId(),
     type,
     owner: normalizeOwner(entry.owner, userList),
-    budget: budgetBuckets.includes(entry.budget) ? entry.budget : "",
+    budget: bucketList.includes(entry.budget) ? entry.budget : "",
     startDate: type.startsWith("fixed-") ? entry.startDate || entry.date : entry.startDate
   };
 }
 
-function normalizeTemplate(template, userList = getUsers()) {
+function normalizeTemplate(template, userList = getUsers(), bucketList = getBudgetBuckets()) {
   const normalizedType = template.type === "income" || template.type === "fixed-income" ? "income" : "expense";
   return {
     ...template,
     id: template.id || makeId(),
     owner: normalizeOwner(template.owner, userList),
-    budget: budgetBuckets.includes(template.budget) ? template.budget : "",
+    budget: bucketList.includes(template.budget) ? template.budget : "",
     type: normalizedType
   };
 }
 
-function normalizeMonthlyBudgets(monthlyBudgets = {}) {
+function normalizeMonthlyBudgets(monthlyBudgets = {}, bucketList = getBudgetBuckets()) {
   const normalized = {};
   Object.entries(monthlyBudgets || {}).forEach(([month, values]) => {
     normalized[month] = {};
-    budgetBuckets.forEach((bucket) => {
+    bucketList.forEach((bucket) => {
       normalized[month][bucket] = Number(values?.[bucket] || 0);
     });
   });
@@ -395,6 +414,10 @@ function canonicalUser(user) {
 
 function getUsers() {
   return state?.users?.length ? state.users : defaultUsers;
+}
+
+function getBudgetBuckets() {
+  return state?.budgetBuckets || defaultBudgetBuckets;
 }
 
 function normalizeOwner(owner, userList = getUsers()) {
@@ -443,6 +466,7 @@ function bindEvents() {
   els.fixedRepeatUnit.addEventListener("change", populateFixedRepeatInterval);
   els.entryForm.addEventListener("submit", handleEntrySubmit);
   els.fixedForm.addEventListener("submit", handleFixedSubmit);
+  els.budgetBucketForm.addEventListener("submit", handleBudgetBucketSubmit);
   els.monthlyBudgetForm.addEventListener("submit", handleMonthlyBudgetSubmit);
   els.currentUser.addEventListener("change", () => {
     currentUser = els.currentUser.value;
@@ -1620,8 +1644,14 @@ function renderBudgetAnalysis() {
   els.budgetAnalysisList.innerHTML = "";
   const key = monthKey(selectedYear, selectedMonth);
   const monthBudget = getMonthlyBudget(key);
+  const buckets = getBudgetBuckets();
 
-  budgetBuckets.forEach((bucket) => {
+  if (!buckets.length) {
+    els.budgetAnalysisList.innerHTML = '<div class="empty-state">예산 항목이 없습니다. 설정에서 항목을 추가해 주세요.</div>';
+    return;
+  }
+
+  buckets.forEach((bucket) => {
     const allocation = Number(monthBudget[bucket] || 0);
     const spent = getBudgetUsageForMonth(selectedYear, selectedMonth, bucket);
     const carryover = getBudgetCarryover(selectedYear, selectedMonth, bucket);
@@ -1799,18 +1829,19 @@ function renderBudgetSelects() {
 
 function fillBudgetSelect(select, selected = "") {
   if (!select) return;
+  const buckets = getBudgetBuckets();
   select.innerHTML = "";
   const empty = document.createElement("option");
   empty.value = "";
   empty.textContent = "미지정";
   select.append(empty);
-  budgetBuckets.forEach((bucket) => {
+  buckets.forEach((bucket) => {
     const option = document.createElement("option");
     option.value = bucket;
     option.textContent = bucket;
     select.append(option);
   });
-  select.value = budgetBuckets.includes(selected) ? selected : "";
+  select.value = buckets.includes(selected) ? selected : "";
 }
 
 function fillPaymentSelect(select, selected) {
@@ -1847,10 +1878,17 @@ function dayOptions(selected) {
 function renderMonthlyBudgetSettings() {
   const key = monthKey(selectedYear, selectedMonth);
   const values = getMonthlyBudget(key);
+  const buckets = getBudgetBuckets();
   els.budgetMonthCaption.textContent = `${selectedYear}년 ${selectedMonth + 1}월 1일 기준 · 만원 단위로 입력`;
   els.monthlyBudgetList.innerHTML = "";
-  budgetBuckets.forEach((bucket) => {
-    const row = document.createElement("label");
+
+  if (!buckets.length) {
+    els.monthlyBudgetList.innerHTML = '<div class="empty-state">예산 항목이 없습니다. 위에서 항목을 추가해 주세요.</div>';
+    return;
+  }
+
+  buckets.forEach((bucket) => {
+    const row = document.createElement("div");
     row.className = "budget-setting-row";
     row.innerHTML = `
       <span>${escapeHtml(bucket)}</span>
@@ -1858,8 +1896,13 @@ function renderMonthlyBudgetSettings() {
         <input type="number" min="0" step="1" inputmode="numeric" data-budget-bucket="${escapeAttr(bucket)}" value="${formatBudgetInput(values[bucket] || 0)}" />
         <em>만원</em>
       </div>
+      <button class="danger-button budget-delete-button" type="button" data-budget-delete="${escapeAttr(bucket)}">삭제</button>
     `;
     els.monthlyBudgetList.append(row);
+  });
+
+  els.monthlyBudgetList.querySelectorAll("[data-budget-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteBudgetBucket(button.dataset.budgetDelete));
   });
 }
 
@@ -1878,11 +1921,52 @@ function handleMonthlyBudgetSubmit(event) {
 function getMonthlyBudget(key) {
   if (!state.monthlyBudgets[key]) {
     state.monthlyBudgets[key] = {};
-    budgetBuckets.forEach((bucket) => {
-      state.monthlyBudgets[key][bucket] = 0;
-    });
   }
+  getBudgetBuckets().forEach((bucket) => {
+    if (!Object.prototype.hasOwnProperty.call(state.monthlyBudgets[key], bucket)) state.monthlyBudgets[key][bucket] = 0;
+  });
   return state.monthlyBudgets[key];
+}
+
+function handleBudgetBucketSubmit(event) {
+  event.preventDefault();
+  const bucket = els.budgetBucketName.value.trim();
+  if (!bucket) {
+    alert("추가할 예산 항목 이름을 입력해 주세요.");
+    return;
+  }
+  if (getBudgetBuckets().includes(bucket)) {
+    alert("이미 있는 예산 항목입니다.");
+    return;
+  }
+
+  state.budgetBuckets = [...getBudgetBuckets(), bucket];
+  Object.keys(state.monthlyBudgets || {}).forEach((key) => {
+    state.monthlyBudgets[key][bucket] = 0;
+  });
+  els.budgetBucketName.value = "";
+  saveState();
+  renderAll();
+}
+
+function deleteBudgetBucket(bucket) {
+  if (!bucket) return;
+  const linkedCount =
+    state.entries.filter((entry) => entry.budget === bucket).length +
+    state.templates.filter((template) => template.budget === bucket).length;
+  const message = linkedCount
+    ? `"${bucket}" 예산 항목을 삭제할까요? 연결된 입력/자동 입력 ${linkedCount}개의 예산 항목은 미지정으로 바뀝니다.`
+    : `"${bucket}" 예산 항목을 삭제할까요?`;
+  if (!confirm(message)) return;
+
+  state.budgetBuckets = getBudgetBuckets().filter((item) => item !== bucket);
+  Object.keys(state.monthlyBudgets || {}).forEach((key) => {
+    delete state.monthlyBudgets[key][bucket];
+  });
+  state.entries = state.entries.map((entry) => (entry.budget === bucket ? { ...entry, budget: "" } : entry));
+  state.templates = state.templates.map((template) => (template.budget === bucket ? { ...template, budget: "" } : template));
+  saveState();
+  renderAll();
 }
 
 function formatBudgetInput(value) {

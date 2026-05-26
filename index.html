@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=4" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
   </head>
   <body>
     <div class="app-shell">
@@ -254,6 +254,13 @@
                   <p class="panel-caption" id="budgetMonthCaption">해당 월 1일 기준, 만원 단위로 입력</p>
                 </div>
               </div>
+              <form class="inline-form budget-bucket-form" id="budgetBucketForm">
+                <label>
+                  <span>예산 항목</span>
+                  <input id="budgetBucketName" type="text" placeholder="예: 여행비" required />
+                </label>
+                <button class="primary-button" type="submit">항목 추가</button>
+              </form>
               <form class="budget-form" id="monthlyBudgetForm">
                 <div class="budget-setting-list" id="monthlyBudgetList"></div>
                 <div class="form-actions">
@@ -430,6 +437,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=4"></script>
+    <script src="./app.js?v=5"></script>
   </body>
 </html>
