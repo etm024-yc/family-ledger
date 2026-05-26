@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
   </head>
   <body>
     <div class="app-shell">
@@ -407,6 +407,20 @@
       </form>
     </dialog>
 
+    <dialog class="modal" id="dayModal">
+      <div class="modal-card day-modal-card">
+        <div class="modal-head">
+          <h2 id="dayModalTitle">일자별 내역</h2>
+          <button class="icon-button" id="closeDayModal" type="button" title="닫기">×</button>
+        </div>
+        <div class="day-entry-list" id="dayModalList"></div>
+        <div class="modal-actions">
+          <button class="ghost-button" id="closeDayModalFooter" type="button">닫기</button>
+          <button class="primary-button" id="dayModalAdd" type="button">새 내역 입력</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog class="modal" id="categoryModal">
       <form method="dialog" class="modal-card" id="quickCategoryForm">
         <div class="modal-head">
@@ -437,6 +451,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=6"></script>
+    <script src="./app.js?v=7"></script>
   </body>
 </html>
