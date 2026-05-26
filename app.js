@@ -64,8 +64,6 @@ const legacyUserMap = {
   "나": "영철",
   "와이프": "경진"
 };
-const viewOrder = ["calendarView", "entryView", "analysisView", "settingsView"];
-const swipeThreshold = 54;
 const holidayData = {
   2025: [
     ["2025-01-28", "설날 연휴"],
@@ -249,6 +247,10 @@ const els = {
   incomeMinor: document.querySelector("#incomeMinor"),
   incomeMajorOptions: document.querySelector("#incomeMajorOptions"),
   incomeMinorOptions: document.querySelector("#incomeMinorOptions"),
+  expenseMajorSuggest: document.querySelector("#expenseMajorSuggest"),
+  expenseMinorSuggest: document.querySelector("#expenseMinorSuggest"),
+  incomeMajorSuggest: document.querySelector("#incomeMajorSuggest"),
+  incomeMinorSuggest: document.querySelector("#incomeMinorSuggest"),
   incomeCategoryTree: document.querySelector("#incomeCategoryTree"),
   addCategoryFromEntry: document.querySelector("#addCategoryFromEntry"),
   categoryModal: document.querySelector("#categoryModal"),
@@ -455,8 +457,8 @@ function bindEvents() {
   els.modalForm.addEventListener("submit", handleModalSubmit);
   els.addCard.addEventListener("click", addCard);
   els.cancelTemplatePick.addEventListener("click", cancelTemplatePick);
-  els.expenseMajor.addEventListener("input", () => renderCategoryOptions("expense"));
-  els.incomeMajor.addEventListener("input", () => renderCategoryOptions("income"));
+  bindCategorySuggest("expense");
+  bindCategorySuggest("income");
   els.expenseCategoryForm.addEventListener("submit", (event) => handleCategorySubmit(event, "expense"));
   els.incomeCategoryForm.addEventListener("submit", (event) => handleCategorySubmit(event, "income"));
   els.addCategoryFromEntry.addEventListener("click", () => {
@@ -476,54 +478,9 @@ function bindEvents() {
     localStorage.setItem(SYNC_AUTO_KEY, els.syncAuto.checked ? "true" : "false");
     updateSyncStatus(els.syncAuto.checked ? "자동 올리기를 켰습니다." : "자동 올리기를 껐습니다.", "neutral");
   });
-  bindGestureNavigation();
-}
-
-function bindGestureNavigation() {
-  let startX = 0;
-  let startY = 0;
-  let lastHorizontalWheelAt = 0;
-
-  document.addEventListener(
-    "touchstart",
-    (event) => {
-      if (!event.touches.length || event.target.closest("dialog")) return;
-      startX = event.touches[0].clientX;
-      startY = event.touches[0].clientY;
-    },
-    { passive: true }
-  );
-
-  document.addEventListener(
-    "touchend",
-    (event) => {
-      if (event.target.closest("dialog")) return;
-      const touch = event.changedTouches[0];
-      const dx = touch.clientX - startX;
-      const dy = touch.clientY - startY;
-      const absX = Math.abs(dx);
-      const absY = Math.abs(dy);
-
-      if (absX > swipeThreshold && absX > absY * 1.25) {
-        moveView(dx < 0 ? 1 : -1);
-      }
-    },
-    { passive: true }
-  );
-
-  document.addEventListener(
-    "wheel",
-    (event) => {
-      if (event.target.closest("dialog")) return;
-      if (Math.abs(event.deltaX) < 48 || Math.abs(event.deltaX) < Math.abs(event.deltaY) * 1.15) return;
-      const now = Date.now();
-      if (now - lastHorizontalWheelAt < 520) return;
-      lastHorizontalWheelAt = now;
-      event.preventDefault();
-      moveView(event.deltaX > 0 ? 1 : -1);
-    },
-    { passive: false }
-  );
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest(".category-form")) hideCategorySuggests();
+  });
 }
 
 function setupMonthSelectors() {
@@ -1988,6 +1945,84 @@ function renderCategoryOptionSet(type, majorInput, majorOptions, minorOptions) {
   fillDatalist(minorOptions, categories[major] || []);
 }
 
+function bindCategorySuggest(type) {
+  const { majorInput, minorInput } = categorySuggestElements(type);
+
+  majorInput.addEventListener("focus", () => showCategorySuggest(type, "major", { filter: false }));
+  majorInput.addEventListener("click", () => showCategorySuggest(type, "major", { filter: false }));
+  majorInput.addEventListener("input", () => {
+    renderCategoryOptions(type);
+    showCategorySuggest(type, "major", { filter: true });
+  });
+  majorInput.addEventListener("change", () => renderCategoryOptions(type));
+
+  minorInput.addEventListener("focus", () => showCategorySuggest(type, "minor", { filter: false }));
+  minorInput.addEventListener("click", () => showCategorySuggest(type, "minor", { filter: false }));
+  minorInput.addEventListener("input", () => showCategorySuggest(type, "minor", { filter: true }));
+}
+
+function categorySuggestElements(type) {
+  return type === "income"
+    ? {
+        majorInput: els.incomeMajor,
+        minorInput: els.incomeMinor,
+        majorMenu: els.incomeMajorSuggest,
+        minorMenu: els.incomeMinorSuggest
+      }
+    : {
+        majorInput: els.expenseMajor,
+        minorInput: els.expenseMinor,
+        majorMenu: els.expenseMajorSuggest,
+        minorMenu: els.expenseMinorSuggest
+      };
+}
+
+function showCategorySuggest(type, field, options = {}) {
+  const { majorInput, minorInput, majorMenu, minorMenu } = categorySuggestElements(type);
+  const isMajor = field === "major";
+  const input = isMajor ? majorInput : minorInput;
+  const menu = isMajor ? majorMenu : minorMenu;
+  const categories = state.categories[type] || {};
+  const baseValues = isMajor ? Object.keys(categories) : categories[majorInput.value.trim()] || [];
+  const query = options.filter ? input.value.trim().toLowerCase() : "";
+  const values = baseValues.filter((value) => !query || value.toLowerCase().includes(query));
+
+  hideCategorySuggests(menu);
+  menu.innerHTML = "";
+  if (!values.length) {
+    menu.classList.remove("open");
+    return;
+  }
+
+  values.forEach((value) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = value;
+    button.addEventListener("pointerdown", (event) => event.preventDefault());
+    button.addEventListener("click", () => {
+      input.value = value;
+      if (isMajor) {
+        minorInput.value = "";
+        renderCategoryOptions(type);
+        setTimeout(() => {
+          minorInput.focus();
+          showCategorySuggest(type, "minor", { filter: false });
+        }, 0);
+      }
+      hideCategorySuggests();
+    });
+    menu.append(button);
+  });
+  menu.classList.add("open");
+}
+
+function hideCategorySuggests(exceptMenu = null) {
+  [els.expenseMajorSuggest, els.expenseMinorSuggest, els.incomeMajorSuggest, els.incomeMinorSuggest].forEach((menu) => {
+    if (!menu || menu === exceptMenu) return;
+    menu.classList.remove("open");
+  });
+}
+
 function addCategory(majorRaw, minorRaw, type = "expense") {
   const major = majorRaw.trim();
   const minor = minorRaw.trim();
@@ -2058,13 +2093,6 @@ function showView(viewId) {
   els.views.forEach((view) => view.classList.toggle("active", view.id === viewId));
   els.navButtons.forEach((button) => button.classList.toggle("active", button.dataset.view === viewId));
   if (viewId === "analysisView") renderAnalysis();
-}
-
-function moveView(delta) {
-  const activeId = document.querySelector(".view.active")?.id || "calendarView";
-  const currentIndex = viewOrder.indexOf(activeId);
-  const nextIndex = Math.min(Math.max(currentIndex + delta, 0), viewOrder.length - 1);
-  if (nextIndex !== currentIndex) showView(viewOrder[nextIndex]);
 }
 
 function getCountingEntries(entries) {

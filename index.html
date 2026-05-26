@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=4" />
   </head>
   <body>
     <div class="app-shell">
@@ -304,11 +304,13 @@
                     <span>대분류</span>
                     <input id="expenseMajor" type="text" list="expenseMajorOptions" placeholder="대분류" required />
                     <datalist id="expenseMajorOptions"></datalist>
+                    <div class="suggest-menu" id="expenseMajorSuggest"></div>
                   </label>
                   <label>
                     <span>소분류</span>
                     <input id="expenseMinor" type="text" list="expenseMinorOptions" placeholder="소분류" required />
                     <datalist id="expenseMinorOptions"></datalist>
+                    <div class="suggest-menu" id="expenseMinorSuggest"></div>
                   </label>
                   <button class="primary-button" type="submit">추가</button>
                 </form>
@@ -322,11 +324,13 @@
                     <span>대분류</span>
                     <input id="incomeMajor" type="text" list="incomeMajorOptions" placeholder="대분류" required />
                     <datalist id="incomeMajorOptions"></datalist>
+                    <div class="suggest-menu" id="incomeMajorSuggest"></div>
                   </label>
                   <label>
                     <span>소분류</span>
                     <input id="incomeMinor" type="text" list="incomeMinorOptions" placeholder="소분류" required />
                     <datalist id="incomeMinorOptions"></datalist>
+                    <div class="suggest-menu" id="incomeMinorSuggest"></div>
                   </label>
                   <button class="primary-button" type="submit">추가</button>
                 </form>
@@ -426,6 +430,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js"></script>
+    <script src="./app.js?v=4"></script>
   </body>
 </html>
