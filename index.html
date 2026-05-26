@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>우리집 가계부</title>
+    <meta name="theme-color" content="#217c57" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./app-icon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Household Ledger</p>
+          <h1>우리집 가계부</h1>
+        </div>
+        <div class="month-picker" aria-label="월 선택">
+          <button class="icon-button" id="prevMonth" type="button" title="이전 달">‹</button>
+          <select id="yearSelect" aria-label="연도 선택"></select>
+          <select id="monthSelect" aria-label="월 선택"></select>
+          <button class="icon-button" id="nextMonth" type="button" title="다음 달">›</button>
+        </div>
+      </header>
+
+      <nav class="bottom-nav" aria-label="주요 화면">
+        <button class="nav-button active" data-view="calendarView" type="button" title="달력">
+          <span>▦</span>
+          <b>달력</b>
+        </button>
+        <button class="nav-button" data-view="entryView" type="button" title="입력">
+          <span>✎</span>
+          <b>입력</b>
+        </button>
+        <button class="nav-button" data-view="analysisView" type="button" title="분석">
+          <span>◔</span>
+          <b>분석</b>
+        </button>
+        <button class="nav-button" data-view="settingsView" type="button" title="설정">
+          <span>⚙</span>
+          <b>설정</b>
+        </button>
+      </nav>
+
+      <main>
+        <section class="view active" id="calendarView" aria-label="달력">
+          <div class="summary-strip">
+            <div class="metric income">
+              <span>수입</span>
+              <strong id="monthIncome">0원</strong>
+            </div>
+            <div class="metric expense">
+              <span>지출</span>
+              <strong id="monthExpense">0원</strong>
+            </div>
+            <div class="metric balance">
+              <span>잔액</span>
+              <strong id="monthBalance">0원</strong>
+            </div>
+          </div>
+          <div class="template-pick-banner" id="templatePickBanner" hidden>
+            <div>
+              <strong id="templatePickTitle">자동입력 날짜 선택</strong>
+              <span id="templatePickText">달력에서 저장할 날짜를 선택하세요.</span>
+            </div>
+            <button class="ghost-button" id="cancelTemplatePick" type="button">취소</button>
+          </div>
+          <div class="calendar" id="calendarGrid" aria-live="polite"></div>
+        </section>
+
+        <section class="view" id="entryView" aria-label="입력">
+          <div class="entry-layout">
+            <form class="entry-form" id="entryForm">
+              <div class="form-header">
+                <h2>입력</h2>
+                <div class="segmented" role="group" aria-label="내역 종류">
+                  <button type="button" class="segment active" data-entry-type="expense">지출</button>
+                  <button type="button" class="segment" data-entry-type="income">수입</button>
+                </div>
+              </div>
+
+              <input type="hidden" id="editingEntryId" />
+              <label>
+                <span id="dateLabel">날짜</span>
+                <input id="entryDate" type="date" required />
+              </label>
+
+              <div class="grid-two">
+                <label>
+                  <span>대분류</span>
+                  <select id="majorCategory" required></select>
+                </label>
+                <label>
+                  <span>소분류</span>
+                  <select id="minorCategory" required></select>
+                </label>
+              </div>
+
+              <div class="grid-two">
+                <label>
+                  <span>금액</span>
+                  <input id="entryAmount" type="number" min="0" step="1" inputmode="numeric" placeholder="20000" required />
+                </label>
+                <label>
+                  <span>정보</span>
+                  <select id="entryInfo" required></select>
+                </label>
+              </div>
+
+              <label>
+                <span>예산 항목</span>
+                <select id="entryBudget"></select>
+              </label>
+
+              <label>
+                <span>메모</span>
+                <input id="entryMemo" type="text" placeholder="외식, 월급, 관리비 등" required />
+              </label>
+
+              <div class="form-actions">
+                <button class="ghost-button" type="button" id="resetEntry">초기화</button>
+                <button class="ghost-button" type="button" id="saveTemplate">자동 입력 저장</button>
+                <button class="primary-button" type="submit">완료</button>
+              </div>
+            </form>
+
+            <aside class="side-panel">
+              <div class="panel-head">
+                <h3>자동 입력</h3>
+                <button class="icon-button" id="addCategoryFromEntry" type="button" title="카테고리 추가">＋</button>
+              </div>
+              <div class="template-list" id="templateList"></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="analysisView" aria-label="분석">
+          <div class="analysis-header">
+            <h2>분석</h2>
+            <p id="analysisMonthLabel"></p>
+          </div>
+          <div class="analysis-grid">
+            <article class="analysis-panel">
+              <h3>가장 많은 소비 카테고리</h3>
+              <div class="chart-row">
+                <div class="pie-chart" id="majorChart" aria-label="대분류 지출 그래프"></div>
+                <ul class="legend" id="majorLegend"></ul>
+              </div>
+            </article>
+            <article class="analysis-panel">
+              <h3>상위 대분류의 소분류</h3>
+              <div class="chart-row">
+                <div class="pie-chart" id="minorChart" aria-label="소분류 지출 그래프"></div>
+                <ul class="legend" id="minorLegend"></ul>
+              </div>
+            </article>
+            <article class="analysis-panel">
+              <h3>카드 결제 대금</h3>
+              <div class="card-total-list" id="cardTotalList"></div>
+            </article>
+            <article class="analysis-panel">
+              <h3>이전 달 대비 변동사항</h3>
+              <div class="delta-grid">
+                <div>
+                  <span>지출</span>
+                  <strong id="expenseDelta">0원</strong>
+                </div>
+                <div>
+                  <span>수입</span>
+                  <strong id="incomeDelta">0원</strong>
+                </div>
+              </div>
+            </article>
+            <article class="analysis-panel budget-analysis-panel">
+              <div class="panel-head">
+                <h3>예산 항목 현황</h3>
+                <small id="budgetAnalysisRange">해당 월 1일~말일 기준</small>
+              </div>
+              <div class="budget-analysis-list" id="budgetAnalysisList"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="settingsView" aria-label="설정">
+          <div class="settings-grid">
+            <article class="settings-panel">
+              <div class="panel-head">
+                <h2>고정 내역 설정</h2>
+                <div class="segmented compact" role="group" aria-label="고정 내역 종류">
+                  <button type="button" class="segment active" data-fixed-type="fixed-expense">고정 지출</button>
+                  <button type="button" class="segment" data-fixed-type="fixed-income">고정 수입</button>
+                </div>
+              </div>
+              <form class="fixed-form" id="fixedForm">
+                <input type="hidden" id="fixedEditingId" />
+                <div class="grid-three">
+                  <label>
+                    <span>시작 날짜</span>
+                    <input id="fixedDate" type="date" required />
+                  </label>
+                  <label>
+                    <span>대분류</span>
+                    <select id="fixedMajorCategory" required></select>
+                  </label>
+                  <label>
+                    <span>소분류</span>
+                    <select id="fixedMinorCategory" required></select>
+                  </label>
+                </div>
+                <div class="grid-three">
+                  <label>
+                    <span>금액</span>
+                    <input id="fixedAmount" type="number" min="0" step="1" inputmode="numeric" required />
+                  </label>
+                  <label>
+                    <span>정보</span>
+                    <select id="fixedInfo" required></select>
+                  </label>
+                  <label>
+                    <span>예산 항목</span>
+                    <select id="fixedBudget"></select>
+                  </label>
+                  <label>
+                    <span>메모</span>
+                    <input id="fixedMemo" type="text" required />
+                  </label>
+                </div>
+                <div class="grid-three">
+                  <label>
+                    <span>반복 단위</span>
+                    <select id="fixedRepeatUnit">
+                      <option value="day">일</option>
+                      <option value="week">주</option>
+                      <option value="month" selected>월</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>반복 주기</span>
+                    <select id="fixedRepeatInterval"></select>
+                  </label>
+                  <label>
+                    <span>휴일 처리</span>
+                    <select id="fixedHolidayRule">
+                      <option value="previous">전일</option>
+                      <option value="next">후일</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <button class="ghost-button" type="button" id="resetFixed">초기화</button>
+                  <button class="primary-button" type="submit">저장</button>
+                </div>
+              </form>
+              <div class="fixed-list" id="fixedList"></div>
+            </article>
+
+            <article class="settings-panel budget-settings-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>월별 예산 배정</h2>
+                  <p class="panel-caption" id="budgetMonthCaption">해당 월 1일 기준, 만원 단위로 입력</p>
+                </div>
+              </div>
+              <form class="budget-form" id="monthlyBudgetForm">
+                <div class="budget-setting-list" id="monthlyBudgetList"></div>
+                <div class="form-actions">
+                  <button class="primary-button" type="submit">저장</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="settings-panel user-settings-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>사용자 설정</h2>
+                  <p class="panel-caption">이 기기에서 입력하는 사람을 선택합니다.</p>
+                </div>
+              </div>
+              <div class="user-current-row">
+                <label>
+                  <span>현재 사용자</span>
+                  <select id="currentUser"></select>
+                </label>
+                <button class="primary-button" id="saveCurrentUser" type="button">저장</button>
+              </div>
+              <form class="inline-form user-form" id="userForm">
+                <input id="editingUserName" type="hidden" />
+                <label>
+                  <span>사용자 이름</span>
+                  <input id="userNameInput" type="text" placeholder="영철" required />
+                </label>
+                <button class="primary-button" id="saveUser" type="submit">추가</button>
+                <button class="ghost-button" id="resetUser" type="button">초기화</button>
+              </form>
+              <div class="user-list" id="userList"></div>
+            </article>
+
+            <article class="settings-panel">
+              <div class="panel-head">
+                <h2>카드 설정</h2>
+                <button class="icon-button" id="addCard" type="button" title="카드 추가">＋</button>
+              </div>
+              <div class="card-settings" id="cardSettings"></div>
+            </article>
+
+            <div class="category-settings-grid">
+              <article class="settings-panel category-settings-panel expense-category-panel">
+                <h2>지출 카테고리 설정</h2>
+                <form class="inline-form category-form" id="expenseCategoryForm">
+                  <label>
+                    <span>대분류</span>
+                    <input id="expenseMajor" type="text" list="expenseMajorOptions" placeholder="대분류" required />
+                    <datalist id="expenseMajorOptions"></datalist>
+                  </label>
+                  <label>
+                    <span>소분류</span>
+                    <input id="expenseMinor" type="text" list="expenseMinorOptions" placeholder="소분류" required />
+                    <datalist id="expenseMinorOptions"></datalist>
+                  </label>
+                  <button class="primary-button" type="submit">추가</button>
+                </form>
+                <div class="category-column" id="expenseCategoryTree"></div>
+              </article>
+
+              <article class="settings-panel category-settings-panel income-category-panel">
+                <h2>수입 카테고리 설정</h2>
+                <form class="inline-form category-form" id="incomeCategoryForm">
+                  <label>
+                    <span>대분류</span>
+                    <input id="incomeMajor" type="text" list="incomeMajorOptions" placeholder="대분류" required />
+                    <datalist id="incomeMajorOptions"></datalist>
+                  </label>
+                  <label>
+                    <span>소분류</span>
+                    <input id="incomeMinor" type="text" list="incomeMinorOptions" placeholder="소분류" required />
+                    <datalist id="incomeMinorOptions"></datalist>
+                  </label>
+                  <button class="primary-button" type="submit">추가</button>
+                </form>
+                <div class="category-column" id="incomeCategoryTree"></div>
+              </article>
+            </div>
+
+            <article class="settings-panel data-panel">
+              <h2>데이터 관리</h2>
+              <p>구글 공유 드라이브 동기화를 붙이기 전까지는 이 JSON 파일을 백업/공유용으로 사용할 수 있습니다.</p>
+              <div class="form-actions">
+                <button class="ghost-button" id="exportData" type="button">내보내기</button>
+                <label class="file-button">
+                  가져오기
+                  <input id="importData" type="file" accept="application/json" />
+                </label>
+              </div>
+            </article>
+
+            <article class="settings-panel sync-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>동기화 설정</h2>
+                  <p class="panel-caption">영철/경진 휴대폰이 같은 Google Drive 데이터를 사용합니다.</p>
+                </div>
+              </div>
+              <div class="sync-grid">
+                <label>
+                  <span>Apps Script URL</span>
+                  <input id="syncUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+                </label>
+                <label>
+                  <span>비밀키</span>
+                  <input id="syncToken" type="password" autocomplete="off" placeholder="동기화 비밀키" />
+                </label>
+              </div>
+              <label class="check-row">
+                <input id="syncAuto" type="checkbox" />
+                <span>저장할 때 자동 올리기</span>
+              </label>
+              <div class="form-actions sync-actions">
+                <button class="primary-button" id="saveSyncConfig" type="button">설정 저장</button>
+                <button class="ghost-button" id="syncNow" type="button">동기화</button>
+                <button class="ghost-button" id="syncPull" type="button">불러오기</button>
+                <button class="ghost-button" id="syncPush" type="button">올리기</button>
+              </div>
+              <p class="sync-status" id="syncStatus">동기화 설정 전입니다.</p>
+              <small class="sync-last" id="syncLastSync">마지막 동기화: 없음</small>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="modal" id="entryModal">
+      <form method="dialog" class="modal-card" id="modalForm">
+        <div class="modal-head">
+          <h2 id="modalTitle">내역 수정</h2>
+          <button class="icon-button" value="cancel" type="submit" title="닫기">×</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions">
+          <button class="ghost-button" value="cancel" type="submit">취소</button>
+          <button class="danger-button" value="delete" type="submit">삭제</button>
+          <button class="primary-button" value="save" type="submit">완료</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="categoryModal">
+      <form method="dialog" class="modal-card" id="quickCategoryForm">
+        <div class="modal-head">
+          <h2>카테고리 추가</h2>
+          <button class="icon-button" value="cancel" type="submit" title="닫기">×</button>
+        </div>
+        <label>
+          <span>구분</span>
+          <select id="quickCategoryType">
+            <option value="expense">지출</option>
+            <option value="income">수입</option>
+          </select>
+        </label>
+        <div class="grid-two">
+          <label>
+            <span>대분류</span>
+            <input id="quickMajor" type="text" required />
+          </label>
+          <label>
+            <span>소분류</span>
+            <input id="quickMinor" type="text" required />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" value="cancel" type="submit">취소</button>
+          <button class="primary-button" value="save" type="submit">추가</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

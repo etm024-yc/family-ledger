@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="우리집 가계부">
+  <rect width="512" height="512" rx="108" fill="#217c57"/>
+  <path d="M138 160c0-26 21-47 47-47h142c26 0 47 21 47 47v210c0 26-21 47-47 47H185c-26 0-47-21-47-47V160z" fill="#fffaf0"/>
+  <path d="M190 185h132M190 237h132M190 289h82" stroke="#217c57" stroke-width="28" stroke-linecap="round"/>
+  <circle cx="326" cy="322" r="44" fill="#e9b949"/>
+  <path d="M306 322h40M326 302v40" stroke="#fffaf0" stroke-width="16" stroke-linecap="round"/>
+</svg>
