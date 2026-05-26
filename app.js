@@ -482,8 +482,6 @@ function bindEvents() {
 function bindGestureNavigation() {
   let startX = 0;
   let startY = 0;
-  let startTarget = null;
-  let lastWheelAt = 0;
   let lastHorizontalWheelAt = 0;
 
   document.addEventListener(
@@ -492,7 +490,6 @@ function bindGestureNavigation() {
       if (!event.touches.length || event.target.closest("dialog")) return;
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
-      startTarget = event.target;
     },
     { passive: true }
   );
@@ -500,35 +497,18 @@ function bindGestureNavigation() {
   document.addEventListener(
     "touchend",
     (event) => {
-      if (!startTarget || event.target.closest("dialog")) return;
+      if (event.target.closest("dialog")) return;
       const touch = event.changedTouches[0];
       const dx = touch.clientX - startX;
       const dy = touch.clientY - startY;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
-      const startedOnCalendar = Boolean(startTarget.closest("#calendarView"));
 
       if (absX > swipeThreshold && absX > absY * 1.25) {
         moveView(dx < 0 ? 1 : -1);
-      } else if (startedOnCalendar && absY > swipeThreshold && absY > absX * 1.25) {
-        moveMonth(dy < 0 ? -1 : 1);
       }
-      startTarget = null;
     },
     { passive: true }
-  );
-
-  els.calendarGrid.addEventListener(
-    "wheel",
-    (event) => {
-      if (Math.abs(event.deltaY) < 38) return;
-      const now = Date.now();
-      if (now - lastWheelAt < 520) return;
-      lastWheelAt = now;
-      event.preventDefault();
-      moveMonth(event.deltaY < 0 ? -1 : 1);
-    },
-    { passive: false }
   );
 
   document.addEventListener(
@@ -1112,7 +1092,7 @@ function renderCalendar() {
   const expense = sumExpense(monthEntries);
   els.monthIncome.textContent = formatMoney(income);
   els.monthExpense.textContent = formatMoney(expense);
-  els.monthBalance.textContent = formatMoney(income - expense);
+  if (els.monthBalance) els.monthBalance.textContent = formatMoney(income - expense);
 }
 
 function openEntryForDate(dateKey) {

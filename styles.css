@@ -626,6 +626,20 @@ label {
   padding-bottom: 14px;
 }
 
+.fixed-settings-head {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fixed-settings-head h2 {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.fixed-settings-head .segmented {
+  flex: 1 1 260px;
+}
+
 .card-config-row {
   grid-template-columns: minmax(110px, 0.35fr) minmax(180px, 1fr) minmax(130px, 0.45fr) minmax(150px, 0.55fr) auto;
 }
@@ -1100,6 +1114,20 @@ label {
   .segment {
     padding-inline: 7px;
   }
+
+  .fixed-settings-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fixed-settings-head h2 {
+    white-space: normal;
+  }
+
+  .fixed-settings-head .segmented {
+    flex-basis: auto;
+    width: 100%;
+  }
 }
 
 /* Final polish */
@@ -1421,5 +1449,119 @@ body {
   .bottom-nav {
     bottom: 12px;
     width: calc(100% - 20px);
+  }
+}
+
+/* Compact calendar-first layout */
+.topbar {
+  justify-content: center;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+}
+
+.topbar .month-picker {
+  max-width: 520px;
+  width: 100%;
+}
+
+.summary-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.metric {
+  min-height: 0;
+  padding: 10px 12px 10px 14px;
+}
+
+.metric span {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.metric strong {
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+@media (max-width: 620px) {
+  .app-shell {
+    padding-top: 8px;
+  }
+
+  main {
+    width: 100%;
+  }
+
+  .topbar {
+    margin-bottom: 8px;
+    padding: 8px;
+  }
+
+  .month-picker {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .month-picker .icon-button {
+    height: 36px;
+    min-width: 36px;
+  }
+
+  .month-picker select {
+    min-height: 36px;
+    padding: 6px 8px;
+  }
+
+  .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .metric {
+    padding: 8px 10px 8px 12px;
+  }
+
+  .calendar {
+    font-size: 12px;
+  }
+
+  .weekday {
+    min-height: 26px;
+    padding: 6px 2px;
+  }
+
+  .day-cell {
+    min-height: clamp(52px, calc((100svh - 250px) / 6), 68px);
+    padding: 4px;
+  }
+
+  .day-head {
+    margin-bottom: 2px;
+  }
+
+  .day-add {
+    height: 18px;
+    width: 18px;
+  }
+
+  .holiday-badge {
+    font-size: 9px;
+    margin-bottom: 2px;
+  }
+
+  .entry-chip {
+    border-radius: 5px;
+    font-size: 10px;
+    margin-top: 3px;
+    min-height: 18px;
+    padding: 2px 4px;
+  }
+
+  .more-chip {
+    font-size: 10px;
+    margin-top: 2px;
   }
 }

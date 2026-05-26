@@ -12,10 +12,6 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Household Ledger</p>
-          <h1>우리집 가계부</h1>
-        </div>
         <div class="month-picker" aria-label="월 선택">
           <button class="icon-button" id="prevMonth" type="button" title="이전 달">‹</button>
           <select id="yearSelect" aria-label="연도 선택"></select>
@@ -46,17 +42,13 @@
       <main>
         <section class="view active" id="calendarView" aria-label="달력">
           <div class="summary-strip">
-            <div class="metric income">
-              <span>수입</span>
-              <strong id="monthIncome">0원</strong>
-            </div>
             <div class="metric expense">
               <span>지출</span>
               <strong id="monthExpense">0원</strong>
             </div>
-            <div class="metric balance">
-              <span>잔액</span>
-              <strong id="monthBalance">0원</strong>
+            <div class="metric income">
+              <span>수입</span>
+              <strong id="monthIncome">0원</strong>
             </div>
           </div>
           <div class="template-pick-banner" id="templatePickBanner" hidden>
@@ -184,8 +176,8 @@
 
         <section class="view" id="settingsView" aria-label="설정">
           <div class="settings-grid">
-            <article class="settings-panel">
-              <div class="panel-head">
+            <article class="settings-panel fixed-settings-panel">
+              <div class="panel-head fixed-settings-head">
                 <h2>고정 내역 설정</h2>
                 <div class="segmented compact" role="group" aria-label="고정 내역 종류">
                   <button type="button" class="segment active" data-fixed-type="fixed-expense">고정 지출</button>
