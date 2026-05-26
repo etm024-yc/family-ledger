@@ -199,6 +199,12 @@ const els = {
   entryModal: document.querySelector("#entryModal"),
   modalForm: document.querySelector("#modalForm"),
   modalBody: document.querySelector("#modalBody"),
+  dayModal: document.querySelector("#dayModal"),
+  dayModalTitle: document.querySelector("#dayModalTitle"),
+  dayModalList: document.querySelector("#dayModalList"),
+  dayModalAdd: document.querySelector("#dayModalAdd"),
+  closeDayModal: document.querySelector("#closeDayModal"),
+  closeDayModalFooter: document.querySelector("#closeDayModalFooter"),
   analysisMonthLabel: document.querySelector("#analysisMonthLabel"),
   majorChart: document.querySelector("#majorChart"),
   majorLegend: document.querySelector("#majorLegend"),
@@ -482,6 +488,13 @@ function bindEvents() {
   els.resetFixed.addEventListener("click", () => resetFixedForm());
   els.saveTemplate.addEventListener("click", saveCurrentTemplate);
   els.modalForm.addEventListener("submit", handleModalSubmit);
+  els.closeDayModal.addEventListener("click", () => els.dayModal.close());
+  els.closeDayModalFooter.addEventListener("click", () => els.dayModal.close());
+  els.dayModalAdd.addEventListener("click", () => {
+    const date = els.dayModal.dataset.date;
+    els.dayModal.close();
+    if (date) openEntryForDate(date);
+  });
   els.addCard.addEventListener("click", addCard);
   els.cancelTemplatePick.addEventListener("click", cancelTemplatePick);
   bindCategorySuggest("expense");
@@ -1016,15 +1029,12 @@ function renderCalendar() {
     cell.dataset.date = key;
     cell.tabIndex = 0;
     cell.setAttribute("role", "button");
-    cell.setAttribute("aria-label", `${key} 입력`);
-    cell.addEventListener("click", (event) => {
-      if (event.target.closest(".entry-chip") || event.target.closest(".day-add")) return;
-      openEntryForDate(key);
-    });
+    cell.setAttribute("aria-label", `${key} 내역 보기`);
+    cell.addEventListener("click", () => openDayModal(key));
     cell.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      openEntryForDate(key);
+      openDayModal(key);
     });
 
     const head = document.createElement("div");
@@ -1037,7 +1047,7 @@ function renderCalendar() {
     addButton.textContent = "+";
     addButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      openEntryForDate(key);
+      openDayModal(key);
     });
     head.append(addButton);
     cell.append(head);
@@ -1056,7 +1066,7 @@ function renderCalendar() {
       chip.innerHTML = `<span>${escapeHtml(entry.memo)}</span><b>${formatCompactMoney(entry.amount)}</b>`;
       chip.addEventListener("click", (event) => {
         event.stopPropagation();
-        openEntryModal(entry);
+        openDayModal(key);
       });
       cell.append(chip);
     });
@@ -1077,6 +1087,52 @@ function renderCalendar() {
   els.monthIncome.textContent = formatMoney(income);
   els.monthExpense.textContent = formatMoney(expense);
   if (els.monthBalance) els.monthBalance.textContent = formatMoney(income - expense);
+}
+
+function openDayModal(dateKey) {
+  if (pendingTemplate) {
+    addTemplateEntryForDate(pendingTemplate, dateKey);
+    pendingTemplate = null;
+    renderTemplatePickBanner();
+    showView("calendarView");
+    return;
+  }
+
+  const date = parseDate(dateKey);
+  const dayEntries = getVisibleEntriesForMonth(date.getFullYear(), date.getMonth()).filter((entry) => entry.date === dateKey);
+  els.dayModal.dataset.date = dateKey;
+  els.dayModalTitle.textContent = formatDayTitle(dateKey);
+  renderDayModalEntries(dayEntries);
+  els.dayModal.showModal();
+}
+
+function renderDayModalEntries(entries) {
+  els.dayModalList.innerHTML = "";
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "이 날짜에 입력된 내역이 없습니다.";
+    els.dayModalList.append(empty);
+    return;
+  }
+
+  entries.forEach((entry) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `day-entry-row ${entryClass(entry)}`;
+    button.innerHTML = `
+      <div>
+        <strong>${escapeHtml(entry.memo)}</strong>
+        <small>${typeLabels[entry.syntheticType || entry.type] || typeLabels[entry.type] || ""} · ${escapeHtml(entry.major)} · ${escapeHtml(entry.minor)}${entry.info ? " · " + escapeHtml(entry.info) : ""}${entry.budget ? " · " + escapeHtml(entry.budget) : ""}</small>
+      </div>
+      <b>${formatMoney(entry.amount)}</b>
+    `;
+    button.addEventListener("click", () => {
+      els.dayModal.close();
+      openEntryModal(entry);
+    });
+    els.dayModalList.append(button);
+  });
 }
 
 function openEntryForDate(dateKey) {
@@ -2358,6 +2414,11 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function formatDayTitle(dateKey) {
+  const date = parseDate(dateKey);
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 (${weekdays[date.getDay()]})`;
 }
 
 function formatCompactMoney(value) {

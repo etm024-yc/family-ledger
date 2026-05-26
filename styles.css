@@ -355,6 +355,67 @@ label span,
   font-size: 12px;
 }
 
+.day-modal-card {
+  max-width: 520px;
+}
+
+.day-entry-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(56vh, 520px);
+  overflow-y: auto;
+}
+
+.day-entry-row {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.day-entry-row strong,
+.day-entry-row small {
+  display: block;
+}
+
+.day-entry-row small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 3px;
+}
+
+.day-entry-row b {
+  font-size: 14px;
+}
+
+.day-entry-row.expense {
+  background: var(--red-2);
+  color: var(--red);
+}
+
+.day-entry-row.income,
+.day-entry-row.fixed-income {
+  background: var(--blue-2);
+  color: var(--blue);
+}
+
+.day-entry-row.fixed-expense {
+  background: var(--brown-2);
+  color: var(--brown);
+}
+
+.day-entry-row.card-payment {
+  background: var(--purple-2);
+  color: var(--purple);
+}
+
 .more-chip {
   color: var(--muted);
   font-size: 12px;
@@ -1304,6 +1365,11 @@ label {
   font-size: 27px;
 }
 
+.nav-button[data-view="analysisView"] span {
+  font-size: 32px;
+  line-height: 0.9;
+}
+
 .nav-button b {
   font-size: 14px;
 }
@@ -1338,6 +1404,10 @@ label {
 
   .nav-button span {
     font-size: 25px;
+  }
+
+  .nav-button[data-view="analysisView"] span {
+    font-size: 31px;
   }
 }
 
