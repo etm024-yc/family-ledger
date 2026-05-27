@@ -171,6 +171,7 @@ let editingTemplateId = "";
 let syncTimer = null;
 let isApplyingRemote = false;
 let activeSettingsList = null;
+let deleteConfirmResolve = null;
 
 const els = {
   yearSelect: document.querySelector("#yearSelect"),
@@ -207,6 +208,10 @@ const els = {
   settingsListTitle: document.querySelector("#settingsListTitle"),
   settingsListContent: document.querySelector("#settingsListContent"),
   closeSettingsListModal: document.querySelector("#closeSettingsListModal"),
+  deleteConfirmModal: document.querySelector("#deleteConfirmModal"),
+  deleteConfirmMessage: document.querySelector("#deleteConfirmMessage"),
+  cancelDeleteConfirm: document.querySelector("#cancelDeleteConfirm"),
+  confirmDeleteConfirm: document.querySelector("#confirmDeleteConfirm"),
   entryModal: document.querySelector("#entryModal"),
   modalForm: document.querySelector("#modalForm"),
   modalBody: document.querySelector("#modalBody"),
@@ -504,6 +509,12 @@ function bindEvents() {
   els.closeQuickTemplateModal.addEventListener("click", () => els.quickTemplateModal.close());
   els.closeSettingsListModal.addEventListener("click", () => els.settingsListModal.close());
   els.settingsListModal.addEventListener("close", restoreSettingsListModal);
+  els.cancelDeleteConfirm.addEventListener("click", () => closeDeleteConfirm(false));
+  els.confirmDeleteConfirm.addEventListener("click", () => closeDeleteConfirm(true));
+  els.deleteConfirmModal.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeDeleteConfirm(false);
+  });
   els.modalForm.addEventListener("submit", handleModalSubmit);
   els.closeDayModal.addEventListener("click", () => els.dayModal.close());
   els.closeDayModalFooter.addEventListener("click", () => els.dayModal.close());
@@ -703,8 +714,30 @@ function setupSettingsFolders() {
     folderButton.textContent = "열기";
     folderButton.addEventListener("click", () => setSettingsFolder(panel, panel.classList.contains("is-collapsed")));
     actions.append(folderButton);
-    head.append(actions);
+    const title = head.querySelector(":scope > h2");
+    if (title?.nextSibling) {
+      head.insertBefore(actions, title.nextSibling);
+    } else {
+      head.append(actions);
+    }
   });
+}
+
+function confirmDelete(message = "삭제하면 되돌릴 수 없습니다.") {
+  if (deleteConfirmResolve) closeDeleteConfirm(false);
+  els.deleteConfirmMessage.textContent = message;
+  els.deleteConfirmModal.showModal();
+  return new Promise((resolve) => {
+    deleteConfirmResolve = resolve;
+  });
+}
+
+function closeDeleteConfirm(result) {
+  if (!deleteConfirmResolve) return;
+  const resolve = deleteConfirmResolve;
+  deleteConfirmResolve = null;
+  if (els.deleteConfirmModal.open) els.deleteConfirmModal.close();
+  resolve(result);
 }
 
 function openSettingsListModal(panel, list, placeholder, restoreHidden) {
@@ -866,7 +899,7 @@ function editUser(user) {
   els.userNameInput.focus();
 }
 
-function deleteUser(user) {
+async function deleteUser(user) {
   const users = getUsers();
   if (users.length <= 1) {
     alert("사용자는 최소 1명은 있어야 합니다.");
@@ -881,7 +914,7 @@ function deleteUser(user) {
   const message = linkedCount
     ? `"${user}"에 연결된 내역, 카드, 퀵 입력 ${linkedCount}개를 "${fallbackUser}" 사용자로 옮기고 삭제할까요?`
     : `"${user}" 사용자를 삭제할까요?`;
-  if (!confirm(message)) return;
+  if (!(await confirmDelete(message))) return;
 
   migrateUserOwner(user, fallbackUser);
   state.users = users.filter((item) => item !== user);
@@ -1497,7 +1530,7 @@ function createModalFields(entry) {
   return wrap;
 }
 
-function handleModalSubmit(event) {
+async function handleModalSubmit(event) {
   event.preventDefault();
   const action = event.submitter?.value;
   const id = els.entryModal.dataset.entryId;
@@ -1507,6 +1540,7 @@ function handleModalSubmit(event) {
   }
 
   if (action === "delete") {
+    if (!(await confirmDelete("이 내역을 삭제하면 되돌릴 수 없습니다."))) return;
     state.entries = state.entries.filter((entry) => entry.id !== id);
   }
 
@@ -1654,10 +1688,10 @@ function renderTemplatePickBanner() {
   els.templatePickText.textContent = "달력에서 저장할 날짜를 누르면 바로 입력됩니다.";
 }
 
-function deleteTemplate(templateId) {
+async function deleteTemplate(templateId) {
   const template = state.templates.find((item) => item.id === templateId);
   if (!template) return;
-  if (!confirm(`퀵 입력 "${template.memo}"을(를) 삭제할까요?`)) return;
+  if (!(await confirmDelete(`퀵 입력 "${template.memo}"을(를) 삭제합니다.`))) return;
   state.templates = state.templates.filter((item) => item.id !== templateId);
   if (pendingTemplate?.id === templateId) pendingTemplate = null;
   if (editingTemplateId === templateId) {
@@ -1789,7 +1823,8 @@ function renderFixedEntries() {
     deleteButton.className = "danger-button";
     deleteButton.type = "button";
     deleteButton.textContent = "삭제";
-    deleteButton.addEventListener("click", () => {
+    deleteButton.addEventListener("click", async () => {
+      if (!(await confirmDelete(`고정 내역 "${entry.memo}"을(를) 삭제합니다.`))) return;
       state.entries = state.entries.filter((item) => item.id !== entry.id);
       saveState();
       renderAll();
@@ -2000,7 +2035,8 @@ function renderCards() {
     deleteButton.className = "danger-button";
     deleteButton.type = "button";
     deleteButton.textContent = "삭제";
-    deleteButton.addEventListener("click", () => {
+    deleteButton.addEventListener("click", async () => {
+      if (!(await confirmDelete(`카드 "${card.name}"을(를) 삭제합니다.`))) return;
       state.cards = state.cards.filter((item) => item.id !== card.id);
       saveState();
       renderAll();
@@ -2167,7 +2203,7 @@ function handleBudgetBucketSubmit(event) {
   renderAll();
 }
 
-function deleteBudgetBucket(bucket) {
+async function deleteBudgetBucket(bucket) {
   if (!bucket) return;
   const linkedCount =
     state.entries.filter((entry) => entry.budget === bucket).length +
@@ -2175,7 +2211,7 @@ function deleteBudgetBucket(bucket) {
   const message = linkedCount
     ? `"${bucket}" 예산 항목을 삭제할까요? 연결된 입력/퀵 입력 ${linkedCount}개의 예산 항목은 미지정으로 바뀝니다.`
     : `"${bucket}" 예산 항목을 삭제할까요?`;
-  if (!confirm(message)) return;
+  if (!(await confirmDelete(message))) return;
 
   state.budgetBuckets = getBudgetBuckets().filter((item) => item !== bucket);
   Object.keys(state.monthlyBudgets || {}).forEach((key) => {
@@ -2339,8 +2375,8 @@ function addCategory(majorRaw, minorRaw, type = "expense") {
   renderAll();
 }
 
-function deleteMinorCategory(type, major, minor) {
-  if (!confirm(`"${major} > ${minor}" 소분류를 삭제할까요?`)) return;
+async function deleteMinorCategory(type, major, minor) {
+  if (!(await confirmDelete(`"${major} > ${minor}" 소분류를 삭제합니다.`))) return;
   const target = state.categories[type] || state.categories.expense;
   target[major] = (target[major] || []).filter((item) => item !== minor);
   if (!target[major].length) delete target[major];

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=11" />
+    <link rel="stylesheet" href="./styles.css?v=12" />
   </head>
   <body>
     <div class="app-shell">
@@ -438,6 +438,19 @@
       </div>
     </dialog>
 
+    <dialog class="modal" id="deleteConfirmModal">
+      <div class="modal-card delete-confirm-card">
+        <div class="modal-head">
+          <h2>삭제하시겠습니까?</h2>
+        </div>
+        <p id="deleteConfirmMessage">삭제하면 되돌릴 수 없습니다.</p>
+        <div class="modal-actions">
+          <button class="ghost-button" id="cancelDeleteConfirm" type="button">아니오</button>
+          <button class="danger-button" id="confirmDeleteConfirm" type="button">예</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog class="modal" id="categoryModal">
       <form method="dialog" class="modal-card" id="quickCategoryForm">
         <div class="modal-head">
@@ -468,6 +481,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=11"></script>
+    <script src="./app.js?v=12"></script>
   </body>
 </html>

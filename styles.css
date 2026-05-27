@@ -749,16 +749,21 @@ label {
 
 .fixed-settings-head {
   align-items: center;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .fixed-settings-head h2 {
   flex: 0 0 auto;
+  grid-column: 1;
+  grid-row: 1;
   white-space: nowrap;
 }
 
 .fixed-settings-head .segmented {
-  flex: 1 1 260px;
+  flex: 1 0 100%;
+  grid-column: 1 / -1;
+  grid-row: 2;
 }
 
 .card-config-row {
@@ -866,6 +871,20 @@ label {
   gap: 8px;
   justify-content: flex-end;
   margin-left: auto;
+}
+
+.fixed-settings-head h2 {
+  order: 1;
+}
+
+.fixed-settings-head .settings-folder-actions {
+  grid-column: 2;
+  grid-row: 1;
+  order: 2;
+}
+
+.fixed-settings-head .segmented {
+  order: 3;
 }
 
 .settings-folder-body {
@@ -1260,6 +1279,21 @@ label {
 .settings-list-content .category-column {
   display: grid;
   gap: 10px;
+}
+
+.delete-confirm-card {
+  max-width: 420px;
+}
+
+.delete-confirm-card p {
+  background: var(--red-2);
+  border: 1px solid #f0beb9;
+  border-radius: 8px;
+  color: var(--red);
+  font-weight: 900;
+  line-height: 1.5;
+  margin: 14px 0 0;
+  padding: 12px;
 }
 
 .modal-head,
