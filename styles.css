@@ -375,17 +375,6 @@ label span,
   max-width: 520px;
 }
 
-.entry-owner-note {
-  background: var(--green-2);
-  border: 1px solid #c3dfd0;
-  border-radius: 8px;
-  color: var(--green);
-  font-size: 13px;
-  font-weight: 900;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-}
-
 .day-entry-list {
   display: grid;
   gap: 10px;
@@ -1251,6 +1240,26 @@ label {
 
 .quick-template-list {
   margin-top: 14px;
+}
+
+.settings-list-modal-card {
+  max-height: min(78vh, 720px);
+  overflow: auto;
+}
+
+.settings-list-content {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.settings-list-content .fixed-list,
+.settings-list-content .budget-setting-list,
+.settings-list-content .user-list,
+.settings-list-content .card-settings,
+.settings-list-content .category-column {
+  display: grid;
+  gap: 10px;
 }
 
 .modal-head,

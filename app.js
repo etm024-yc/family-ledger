@@ -170,6 +170,7 @@ let pendingTemplate = null;
 let editingTemplateId = "";
 let syncTimer = null;
 let isApplyingRemote = false;
+let activeSettingsList = null;
 
 const els = {
   yearSelect: document.querySelector("#yearSelect"),
@@ -202,6 +203,10 @@ const els = {
   quickTemplateModal: document.querySelector("#quickTemplateModal"),
   quickTemplateList: document.querySelector("#quickTemplateList"),
   closeQuickTemplateModal: document.querySelector("#closeQuickTemplateModal"),
+  settingsListModal: document.querySelector("#settingsListModal"),
+  settingsListTitle: document.querySelector("#settingsListTitle"),
+  settingsListContent: document.querySelector("#settingsListContent"),
+  closeSettingsListModal: document.querySelector("#closeSettingsListModal"),
   entryModal: document.querySelector("#entryModal"),
   modalForm: document.querySelector("#modalForm"),
   modalBody: document.querySelector("#modalBody"),
@@ -497,6 +502,8 @@ function bindEvents() {
   els.saveTemplate.addEventListener("click", saveCurrentTemplate);
   els.quickTemplateButton.addEventListener("click", openQuickTemplateModal);
   els.closeQuickTemplateModal.addEventListener("click", () => els.quickTemplateModal.close());
+  els.closeSettingsListModal.addEventListener("click", () => els.settingsListModal.close());
+  els.settingsListModal.addEventListener("close", restoreSettingsListModal);
   els.modalForm.addEventListener("submit", handleModalSubmit);
   els.closeDayModal.addEventListener("click", () => els.dayModal.close());
   els.closeDayModalFooter.addEventListener("click", () => els.dayModal.close());
@@ -678,16 +685,15 @@ function setupSettingsFolders() {
 
     const list = panel.querySelector(".fixed-list, .budget-setting-list, .user-list, .card-settings, .category-column");
     if (list) {
-      list.classList.add("settings-list-hidden");
+      const placeholder = document.createComment("settings-list-placeholder");
+      list.before(placeholder);
+      const isInputList = list.matches(".budget-setting-list, .card-settings");
+      if (!isInputList) list.classList.add("settings-list-hidden");
       const listButton = document.createElement("button");
       listButton.className = "ghost-button settings-list-toggle";
       listButton.type = "button";
-      listButton.textContent = "목록 보기";
-      listButton.addEventListener("click", () => {
-        openSettingsFolder(panel);
-        const isHidden = list.classList.toggle("settings-list-hidden");
-        listButton.textContent = isHidden ? "목록 보기" : "목록 닫기";
-      });
+      listButton.textContent = "목록";
+      listButton.addEventListener("click", () => openSettingsListModal(panel, list, placeholder, !isInputList));
       actions.append(listButton);
     }
 
@@ -699,6 +705,33 @@ function setupSettingsFolders() {
     actions.append(folderButton);
     head.append(actions);
   });
+}
+
+function openSettingsListModal(panel, list, placeholder, restoreHidden) {
+  restoreSettingsListModal();
+  activeSettingsList = { list, placeholder, restoreHidden };
+  els.settingsListTitle.textContent = `${getSettingsPanelTitle(panel)} 목록`;
+  els.settingsListContent.innerHTML = "";
+  list.classList.remove("settings-list-hidden");
+  els.settingsListContent.append(list);
+  els.settingsListModal.showModal();
+}
+
+function restoreSettingsListModal() {
+  if (!activeSettingsList) return;
+  const { list, placeholder, restoreHidden } = activeSettingsList;
+  if (placeholder.parentNode) placeholder.parentNode.insertBefore(list, placeholder.nextSibling);
+  if (restoreHidden) list.classList.add("settings-list-hidden");
+  activeSettingsList = null;
+  els.settingsListContent.innerHTML = "";
+}
+
+function closeSettingsListModalIfOpen() {
+  if (els.settingsListModal.open) els.settingsListModal.close();
+}
+
+function getSettingsPanelTitle(panel) {
+  return panel.querySelector(":scope > .settings-folder-head h2")?.textContent.trim() || panel.querySelector("h2")?.textContent.trim() || "설정";
 }
 
 function ensureSettingsFolderHead(panel) {
@@ -760,7 +793,12 @@ function renderUserSettings() {
     editButton.className = "ghost-button";
     editButton.type = "button";
     editButton.textContent = "수정";
-    editButton.addEventListener("click", () => editUser(user));
+    editButton.addEventListener("click", () => {
+      closeSettingsListModalIfOpen();
+      const panel = document.querySelector(".user-settings-panel");
+      if (panel) openSettingsFolder(panel);
+      editUser(user);
+    });
 
     const deleteButton = document.createElement("button");
     deleteButton.className = "danger-button";
@@ -1138,7 +1176,7 @@ function renderCalendar() {
       const chip = document.createElement("button");
       chip.className = `entry-chip ${entryClass(entry)}`;
       chip.type = "button";
-      chip.innerHTML = `<span><em>${escapeHtml(entryOwnerLabel(entry))}</em>${escapeHtml(entry.memo)}</span><b>${formatCompactMoney(entry.amount)}</b>`;
+      chip.innerHTML = `<span>${escapeHtml(entry.memo)}</span><b>${formatCompactMoney(entry.amount)}</b>`;
       chip.addEventListener("click", (event) => {
         event.stopPropagation();
         openDayModal(key);
@@ -1432,7 +1470,6 @@ function openFixedEntryEditor(id) {
 function createModalFields(entry) {
   const wrap = document.createElement("div");
   wrap.innerHTML = `
-    <div class="entry-owner-note">입력 사용자: ${escapeHtml(entryOwnerLabel(entry))}</div>
     <label><span>날짜</span><input name="date" type="date" value="${entry.date}" required></label>
     <div class="grid-two">
       <label><span>대분류</span><select name="major" required></select></label>
@@ -1742,7 +1779,12 @@ function renderFixedEntries() {
     editButton.className = "ghost-button";
     editButton.type = "button";
     editButton.textContent = "수정";
-    editButton.addEventListener("click", () => editFixedEntry(entry.id));
+    editButton.addEventListener("click", () => {
+      closeSettingsListModalIfOpen();
+      const panel = document.querySelector(".fixed-settings-panel");
+      if (panel) openSettingsFolder(panel);
+      editFixedEntry(entry.id);
+    });
     const deleteButton = document.createElement("button");
     deleteButton.className = "danger-button";
     deleteButton.type = "button";

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=10" />
+    <link rel="stylesheet" href="./styles.css?v=11" />
   </head>
   <body>
     <div class="app-shell">
@@ -428,6 +428,16 @@
       </div>
     </dialog>
 
+    <dialog class="modal" id="settingsListModal">
+      <div class="modal-card settings-list-modal-card">
+        <div class="modal-head">
+          <h2 id="settingsListTitle">목록</h2>
+          <button class="icon-button" id="closeSettingsListModal" type="button" title="닫기">×</button>
+        </div>
+        <div class="settings-list-content" id="settingsListContent"></div>
+      </div>
+    </dialog>
+
     <dialog class="modal" id="categoryModal">
       <form method="dialog" class="modal-card" id="quickCategoryForm">
         <div class="modal-head">
@@ -458,6 +468,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=10"></script>
+    <script src="./app.js?v=11"></script>
   </body>
 </html>
