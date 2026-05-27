@@ -1,10 +1,12 @@
 const STORAGE_KEY = "family-ledger-state-v1";
 const USER_KEY = "family-ledger-current-user-v1";
+const VIEW_KEY = "family-ledger-active-view-v1";
 const SYNC_URL_KEY = "family-ledger-sync-url-v1";
 const SYNC_TOKEN_KEY = "family-ledger-sync-token-v1";
 const SYNC_AUTO_KEY = "family-ledger-sync-auto-v1";
 const SYNC_LAST_KEY = "family-ledger-sync-last-v1";
 const SYNC_DEBOUNCE_MS = 1500;
+const viewIds = ["calendarView", "entryView", "analysisView", "settingsView"];
 
 const defaultExpenseCategories = {
   "식비": ["외식", "간식", "카페", "배달", "픽업"],
@@ -195,7 +197,11 @@ const els = {
   minorCategory: document.querySelector("#minorCategory"),
   resetEntry: document.querySelector("#resetEntry"),
   saveTemplate: document.querySelector("#saveTemplate"),
+  quickTemplateButton: document.querySelector("#quickTemplateButton"),
   templateList: document.querySelector("#templateList"),
+  quickTemplateModal: document.querySelector("#quickTemplateModal"),
+  quickTemplateList: document.querySelector("#quickTemplateList"),
+  closeQuickTemplateModal: document.querySelector("#closeQuickTemplateModal"),
   entryModal: document.querySelector("#entryModal"),
   modalForm: document.querySelector("#modalForm"),
   modalBody: document.querySelector("#modalBody"),
@@ -260,7 +266,6 @@ const els = {
   incomeMajorSuggest: document.querySelector("#incomeMajorSuggest"),
   incomeMinorSuggest: document.querySelector("#incomeMinorSuggest"),
   incomeCategoryTree: document.querySelector("#incomeCategoryTree"),
-  addCategoryFromEntry: document.querySelector("#addCategoryFromEntry"),
   categoryModal: document.querySelector("#categoryModal"),
   quickCategoryForm: document.querySelector("#quickCategoryForm"),
   quickCategoryType: document.querySelector("#quickCategoryType"),
@@ -284,12 +289,13 @@ init();
 function init() {
   setupMonthSelectors();
   bindEvents();
-  resetEntryForm();
+  resetEntryForm(toDateKey(new Date()));
   resetFixedForm();
   renderAll();
+  showView(loadActiveView(), { skipStore: true });
   registerServiceWorker();
   syncOnStart();
-  setInterval(() => pullSync({ quiet: true, onlyIfRemoteNewer: true }), 60000);
+  setInterval(() => pullSync({ quiet: true, onlyIfRemoteNewer: true }), 10 * 60 * 1000);
 }
 
 function loadState() {
@@ -487,6 +493,8 @@ function bindEvents() {
   els.resetEntry.addEventListener("click", () => resetEntryForm());
   els.resetFixed.addEventListener("click", () => resetFixedForm());
   els.saveTemplate.addEventListener("click", saveCurrentTemplate);
+  els.quickTemplateButton.addEventListener("click", openQuickTemplateModal);
+  els.closeQuickTemplateModal.addEventListener("click", () => els.quickTemplateModal.close());
   els.modalForm.addEventListener("submit", handleModalSubmit);
   els.closeDayModal.addEventListener("click", () => els.dayModal.close());
   els.closeDayModalFooter.addEventListener("click", () => els.dayModal.close());
@@ -501,12 +509,6 @@ function bindEvents() {
   bindCategorySuggest("income");
   els.expenseCategoryForm.addEventListener("submit", (event) => handleCategorySubmit(event, "expense"));
   els.incomeCategoryForm.addEventListener("submit", (event) => handleCategorySubmit(event, "income"));
-  els.addCategoryFromEntry.addEventListener("click", () => {
-    els.quickCategoryType.value = entryType;
-    els.quickMajor.value = els.majorCategory.value || "";
-    els.quickMinor.value = "";
-    els.categoryModal.showModal();
-  });
   els.quickCategoryForm.addEventListener("submit", handleQuickCategory);
   els.exportData.addEventListener("click", exportData);
   els.importData.addEventListener("change", importData);
@@ -1328,8 +1330,7 @@ function openEntryModal(entry) {
     return;
   }
   if (isFixedEntry(entry)) {
-    alert("고정 내역은 설정 탭의 고정 내역 설정에서 수정해 주세요.");
-    showView("settingsView");
+    openFixedEntryEditor(entry.sourceId || entry.id);
     return;
   }
 
@@ -1340,6 +1341,18 @@ function openEntryModal(entry) {
   els.modalBody.append(createModalFields(sourceEntry));
   els.entryModal.dataset.entryId = sourceEntry.id;
   els.entryModal.showModal();
+}
+
+function openFixedEntryEditor(id) {
+  const sourceEntry = state.entries.find((item) => item.id === id);
+  if (!sourceEntry) return;
+  showView("settingsView");
+  editFixedEntry(sourceEntry.id);
+  requestAnimationFrame(() => {
+    const panel = document.querySelector(".fixed-settings-panel");
+    if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    els.fixedMemo.focus();
+  });
 }
 
 function createModalFields(entry) {
@@ -1426,44 +1439,68 @@ function saveCurrentTemplate() {
 }
 
 function renderTemplates() {
-  els.templateList.innerHTML = "";
+  renderTemplateList(els.templateList);
+  if (els.quickTemplateModal.open) renderTemplateList(els.quickTemplateList);
+}
+
+function openQuickTemplateModal() {
+  renderTemplateList(els.quickTemplateList);
+  els.quickTemplateModal.showModal();
+}
+
+function closeQuickTemplateModal() {
+  if (els.quickTemplateModal.open) els.quickTemplateModal.close();
+}
+
+function renderTemplateList(target) {
+  target.innerHTML = "";
   if (!state.templates.length) {
-    els.templateList.innerHTML = '<div class="empty-state">저장된 자동 입력이 없습니다.</div>';
+    target.innerHTML = '<div class="empty-state">저장된 자동 입력이 없습니다.</div>';
     return;
   }
 
   state.templates.forEach((template) => {
-    const type = template.type === "income" ? "income" : "expense";
-    const card = document.createElement("div");
-    card.className = `template-card ${type}`;
-    card.innerHTML = `
+    target.append(createTemplateCard(template));
+  });
+}
+
+function createTemplateCard(template) {
+  const type = template.type === "income" ? "income" : "expense";
+  const card = document.createElement("div");
+  card.className = `template-card ${type}`;
+  card.innerHTML = `
       <div class="template-body">
         <strong>${escapeHtml(template.memo)}</strong>
         <span>${typeLabels[type]} · ${escapeHtml(template.major)} · ${escapeHtml(template.minor)}</span>
         <span>${escapeHtml(template.info || "정보 없음")} · ${escapeHtml(template.budget || "미지정")} · ${formatMoney(template.amount)}</span>
       </div>
     `;
-    const button = document.createElement("button");
-    button.className = "primary-button";
-    button.type = "button";
-    button.textContent = "입력";
-    button.addEventListener("click", () => startTemplateDatePick(template));
-    const editButton = document.createElement("button");
-    editButton.className = "ghost-button";
-    editButton.type = "button";
-    editButton.textContent = "수정";
-    editButton.addEventListener("click", () => editTemplate(template.id));
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "danger-button";
-    deleteButton.type = "button";
-    deleteButton.textContent = "삭제";
-    deleteButton.addEventListener("click", () => deleteTemplate(template.id));
-    const actions = document.createElement("div");
-    actions.className = "template-actions";
-    actions.append(button, editButton, deleteButton);
-    card.append(actions);
-    els.templateList.append(card);
+  const button = document.createElement("button");
+  button.className = "primary-button";
+  button.type = "button";
+  button.textContent = "입력";
+  button.addEventListener("click", () => {
+    closeQuickTemplateModal();
+    startTemplateDatePick(template);
   });
+  const editButton = document.createElement("button");
+  editButton.className = "ghost-button";
+  editButton.type = "button";
+  editButton.textContent = "수정";
+  editButton.addEventListener("click", () => {
+    closeQuickTemplateModal();
+    editTemplate(template.id);
+  });
+  const deleteButton = document.createElement("button");
+  deleteButton.className = "danger-button";
+  deleteButton.type = "button";
+  deleteButton.textContent = "삭제";
+  deleteButton.addEventListener("click", () => deleteTemplate(template.id));
+  const actions = document.createElement("div");
+  actions.className = "template-actions";
+  actions.append(button, editButton, deleteButton);
+  card.append(actions);
+  return card;
 }
 
 function editTemplate(templateId) {
@@ -1670,7 +1707,7 @@ function renderAnalysis() {
   const monthEntries = getCountingEntries(getVisibleEntriesForMonth(selectedYear, selectedMonth)).filter((entry) => isSameMonth(entry.date, selectedYear, selectedMonth));
   const previousDate = new Date(selectedYear, selectedMonth - 1, 1);
   const previousEntries = getCountingEntries(getVisibleEntriesForMonth(previousDate.getFullYear(), previousDate.getMonth())).filter((entry) => isSameMonth(entry.date, previousDate.getFullYear(), previousDate.getMonth()));
-  const expenses = monthEntries.filter(isExpenseEntry);
+  const expenses = monthEntries.filter(isConsumptionEntry);
   const majorTotals = totalBy(expenses, "major");
   const topMajor = Object.entries(majorTotals).sort((a, b) => b[1] - a[1])[0]?.[0];
   const minorTotals = totalBy(expenses.filter((entry) => entry.major === topMajor), "minor");
@@ -1693,7 +1730,7 @@ function renderAnalysis() {
     els.cardTotalList.append(row);
   });
 
-  setDelta(els.expenseDelta, sumExpense(monthEntries) - sumExpense(previousEntries));
+  setDelta(els.expenseDelta, sumConsumption(monthEntries) - sumConsumption(previousEntries));
   setDelta(els.incomeDelta, sumIncome(monthEntries) - sumIncome(previousEntries));
   renderBudgetAnalysis();
 }
@@ -1735,7 +1772,7 @@ function renderBudgetAnalysis() {
 function getBudgetUsageForMonth(year, month, bucket) {
   return getCountingEntries(getVisibleEntriesForMonth(year, month))
     .filter((entry) => isSameMonth(entry.date, year, month))
-    .filter((entry) => isExpenseEntry(entry) && entry.budget === bucket)
+    .filter((entry) => isConsumptionEntry(entry) && entry.budget === bucket)
     .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
 }
 
@@ -1762,7 +1799,7 @@ function getBudgetStartMonth(year, month) {
     }
   });
   state.entries.forEach((entry) => {
-    if (entry.budget && isExpenseEntry(entry)) {
+    if (entry.budget && isConsumptionEntry(entry)) {
       candidates.push(new Date(parseDate(entry.startDate || entry.date).getFullYear(), parseDate(entry.startDate || entry.date).getMonth(), 1));
     }
   });
@@ -2232,10 +2269,17 @@ function importData(event) {
   event.target.value = "";
 }
 
-function showView(viewId) {
-  els.views.forEach((view) => view.classList.toggle("active", view.id === viewId));
-  els.navButtons.forEach((button) => button.classList.toggle("active", button.dataset.view === viewId));
-  if (viewId === "analysisView") renderAnalysis();
+function loadActiveView() {
+  const savedView = localStorage.getItem(VIEW_KEY);
+  return viewIds.includes(savedView) ? savedView : "calendarView";
+}
+
+function showView(viewId, options = {}) {
+  const activeView = viewIds.includes(viewId) ? viewId : "calendarView";
+  if (!options.skipStore) localStorage.setItem(VIEW_KEY, activeView);
+  els.views.forEach((view) => view.classList.toggle("active", view.id === activeView));
+  els.navButtons.forEach((button) => button.classList.toggle("active", button.dataset.view === activeView));
+  if (activeView === "analysisView") renderAnalysis();
 }
 
 function getCountingEntries(entries) {
@@ -2250,6 +2294,10 @@ function isExpenseEntry(entry) {
   return entry.type === "expense" || entry.type === "fixed-expense" || entry.syntheticType === "fixed-expense";
 }
 
+function isConsumptionEntry(entry) {
+  return entry.type === "expense";
+}
+
 function isIncomeEntry(entry) {
   return entry.type === "income" || entry.type === "fixed-income" || entry.syntheticType === "fixed-income";
 }
@@ -2262,6 +2310,10 @@ function entryClass(entry) {
 
 function sumExpense(entries) {
   return entries.filter(isExpenseEntry).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+}
+
+function sumConsumption(entries) {
+  return entries.filter(isConsumptionEntry).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
 }
 
 function sumIncome(entries) {

@@ -454,6 +454,22 @@ label span,
   justify-content: space-between;
 }
 
+.form-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.form-title-row h2 {
+  margin: 0;
+}
+
+.quick-template-button {
+  min-height: 38px;
+  padding: 8px 13px;
+}
+
 .segmented {
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -1115,6 +1131,15 @@ label {
 .modal-card {
   background: var(--surface);
   padding: 18px;
+}
+
+.quick-template-modal-card {
+  max-height: min(78vh, 680px);
+  overflow: auto;
+}
+
+.quick-template-list {
+  margin-top: 14px;
 }
 
 .modal-head,

@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=8" />
+    <link rel="stylesheet" href="./styles.css?v=9" />
   </head>
   <body>
     <div class="app-shell">
@@ -65,7 +65,10 @@
           <div class="entry-layout">
             <form class="entry-form" id="entryForm">
               <div class="form-header">
-                <h2>입력</h2>
+                <div class="form-title-row">
+                  <h2>입력</h2>
+                  <button class="ghost-button quick-template-button" id="quickTemplateButton" type="button">퀵 입력</button>
+                </div>
                 <div class="segmented" role="group" aria-label="내역 종류">
                   <button type="button" class="segment active" data-entry-type="expense">지출</button>
                   <button type="button" class="segment" data-entry-type="income">수입</button>
@@ -120,7 +123,6 @@
             <aside class="side-panel">
               <div class="panel-head">
                 <h3>자동 입력</h3>
-                <button class="icon-button" id="addCategoryFromEntry" type="button" title="카테고리 추가">＋</button>
               </div>
               <div class="template-list" id="templateList"></div>
             </aside>
@@ -421,6 +423,16 @@
       </div>
     </dialog>
 
+    <dialog class="modal" id="quickTemplateModal">
+      <div class="modal-card quick-template-modal-card">
+        <div class="modal-head">
+          <h2>퀵 입력</h2>
+          <button class="icon-button" id="closeQuickTemplateModal" type="button" title="닫기">×</button>
+        </div>
+        <div class="template-list quick-template-list" id="quickTemplateList"></div>
+      </div>
+    </dialog>
+
     <dialog class="modal" id="categoryModal">
       <form method="dialog" class="modal-card" id="quickCategoryForm">
         <div class="modal-head">
@@ -451,6 +463,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=7"></script>
+    <script src="./app.js?v=9"></script>
   </body>
 </html>
