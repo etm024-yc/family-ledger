@@ -216,6 +216,7 @@ const els = {
   majorLegend: document.querySelector("#majorLegend"),
   minorChart: document.querySelector("#minorChart"),
   minorLegend: document.querySelector("#minorLegend"),
+  cardPaymentGrandTotal: document.querySelector("#cardPaymentGrandTotal"),
   cardTotalList: document.querySelector("#cardTotalList"),
   expenseDelta: document.querySelector("#expenseDelta"),
   incomeDelta: document.querySelector("#incomeDelta"),
@@ -292,6 +293,7 @@ function init() {
   resetEntryForm(toDateKey(new Date()));
   resetFixedForm();
   renderAll();
+  setupSettingsFolders();
   showView(loadActiveView(), { skipStore: true });
   registerServiceWorker();
   syncOnStart();
@@ -657,6 +659,77 @@ function renderAll() {
   renderTemplatePickBanner();
 }
 
+function setupSettingsFolders() {
+  document.querySelectorAll("#settingsView .settings-panel").forEach((panel) => {
+    if (panel.dataset.folderReady) return;
+    panel.dataset.folderReady = "true";
+    panel.classList.add("settings-folder", "is-collapsed");
+
+    const head = ensureSettingsFolderHead(panel);
+    const body = document.createElement("div");
+    body.className = "settings-folder-body";
+    Array.from(panel.childNodes).forEach((node) => {
+      if (node !== head) body.append(node);
+    });
+    panel.append(body);
+
+    const actions = document.createElement("div");
+    actions.className = "settings-folder-actions";
+
+    const list = panel.querySelector(".fixed-list, .budget-setting-list, .user-list, .card-settings, .category-column");
+    if (list) {
+      list.classList.add("settings-list-hidden");
+      const listButton = document.createElement("button");
+      listButton.className = "ghost-button settings-list-toggle";
+      listButton.type = "button";
+      listButton.textContent = "목록 보기";
+      listButton.addEventListener("click", () => {
+        openSettingsFolder(panel);
+        const isHidden = list.classList.toggle("settings-list-hidden");
+        listButton.textContent = isHidden ? "목록 보기" : "목록 닫기";
+      });
+      actions.append(listButton);
+    }
+
+    const folderButton = document.createElement("button");
+    folderButton.className = "ghost-button settings-folder-toggle";
+    folderButton.type = "button";
+    folderButton.textContent = "열기";
+    folderButton.addEventListener("click", () => setSettingsFolder(panel, panel.classList.contains("is-collapsed")));
+    actions.append(folderButton);
+    head.append(actions);
+  });
+}
+
+function ensureSettingsFolderHead(panel) {
+  let head = panel.querySelector(":scope > .panel-head");
+  if (head) {
+    head.classList.add("settings-folder-head");
+    return head;
+  }
+
+  head = document.createElement("div");
+  head.className = "panel-head settings-folder-head";
+  const title = panel.querySelector(":scope > h2");
+  if (title) {
+    panel.insertBefore(head, title);
+    head.append(title);
+  } else {
+    panel.prepend(head);
+  }
+  return head;
+}
+
+function openSettingsFolder(panel) {
+  setSettingsFolder(panel, true);
+}
+
+function setSettingsFolder(panel, isOpen) {
+  panel.classList.toggle("is-collapsed", !isOpen);
+  const button = panel.querySelector(":scope > .settings-folder-head .settings-folder-toggle");
+  if (button) button.textContent = isOpen ? "접기" : "열기";
+}
+
 function renderUserSettings() {
   const users = getUsers();
   els.currentUser.innerHTML = "";
@@ -768,7 +841,7 @@ function deleteUser(user) {
     state.cards.filter((card) => card.owner === user).length +
     state.templates.filter((template) => template.owner === user).length;
   const message = linkedCount
-    ? `"${user}"에 연결된 내역, 카드, 자동 입력 ${linkedCount}개를 "${fallbackUser}" 사용자로 옮기고 삭제할까요?`
+    ? `"${user}"에 연결된 내역, 카드, 퀵 입력 ${linkedCount}개를 "${fallbackUser}" 사용자로 옮기고 삭제할까요?`
     : `"${user}" 사용자를 삭제할까요?`;
   if (!confirm(message)) return;
 
@@ -1065,7 +1138,7 @@ function renderCalendar() {
       const chip = document.createElement("button");
       chip.className = `entry-chip ${entryClass(entry)}`;
       chip.type = "button";
-      chip.innerHTML = `<span>${escapeHtml(entry.memo)}</span><b>${formatCompactMoney(entry.amount)}</b>`;
+      chip.innerHTML = `<span><em>${escapeHtml(entryOwnerLabel(entry))}</em>${escapeHtml(entry.memo)}</span><b>${formatCompactMoney(entry.amount)}</b>`;
       chip.addEventListener("click", (event) => {
         event.stopPropagation();
         openDayModal(key);
@@ -1125,7 +1198,7 @@ function renderDayModalEntries(entries) {
     button.innerHTML = `
       <div>
         <strong>${escapeHtml(entry.memo)}</strong>
-        <small>${typeLabels[entry.syntheticType || entry.type] || typeLabels[entry.type] || ""} · ${escapeHtml(entry.major)} · ${escapeHtml(entry.minor)}${entry.info ? " · " + escapeHtml(entry.info) : ""}${entry.budget ? " · " + escapeHtml(entry.budget) : ""}</small>
+        <small>${escapeHtml(entryOwnerLabel(entry))} · ${typeLabels[entry.syntheticType || entry.type] || typeLabels[entry.type] || ""} · ${escapeHtml(entry.major)} · ${escapeHtml(entry.minor)}${entry.info ? " · " + escapeHtml(entry.info) : ""}${entry.budget ? " · " + escapeHtml(entry.budget) : ""}</small>
       </div>
       <b>${formatMoney(entry.amount)}</b>
     `;
@@ -1313,7 +1386,7 @@ function readEntryForm() {
 
 function resetEntryForm(date = toDateKey(new Date(selectedYear, selectedMonth, 1))) {
   editingTemplateId = "";
-  els.saveTemplate.textContent = "자동 입력 저장";
+  els.saveTemplate.textContent = "퀵 입력 저장";
   els.editingEntryId.value = "";
   els.entryDate.value = date;
   els.entryAmount.value = "";
@@ -1350,6 +1423,7 @@ function openFixedEntryEditor(id) {
   editFixedEntry(sourceEntry.id);
   requestAnimationFrame(() => {
     const panel = document.querySelector(".fixed-settings-panel");
+    if (panel) openSettingsFolder(panel);
     if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
     els.fixedMemo.focus();
   });
@@ -1358,6 +1432,7 @@ function openFixedEntryEditor(id) {
 function createModalFields(entry) {
   const wrap = document.createElement("div");
   wrap.innerHTML = `
+    <div class="entry-owner-note">입력 사용자: ${escapeHtml(entryOwnerLabel(entry))}</div>
     <label><span>날짜</span><input name="date" type="date" value="${entry.date}" required></label>
     <div class="grid-two">
       <label><span>대분류</span><select name="major" required></select></label>
@@ -1427,11 +1502,11 @@ function saveCurrentTemplate() {
   if (editingTemplateId) {
     state.templates = state.templates.map((template) => (template.id === editingTemplateId ? { ...template, ...payload, id: template.id } : template));
     editingTemplateId = "";
-    els.saveTemplate.textContent = "자동 입력 저장";
-    alert("자동입력을 수정했습니다.");
+    els.saveTemplate.textContent = "퀵 입력 저장";
+    alert("퀵 입력을 수정했습니다.");
   } else {
     state.templates.push({ ...payload, id: makeId() });
-    alert("자동 입력 목록에 추가했습니다.");
+    alert("퀵 입력 목록에 추가했습니다.");
   }
 
   saveState();
@@ -1439,7 +1514,7 @@ function saveCurrentTemplate() {
 }
 
 function renderTemplates() {
-  renderTemplateList(els.templateList);
+  if (els.templateList) renderTemplateList(els.templateList);
   if (els.quickTemplateModal.open) renderTemplateList(els.quickTemplateList);
 }
 
@@ -1455,7 +1530,7 @@ function closeQuickTemplateModal() {
 function renderTemplateList(target) {
   target.innerHTML = "";
   if (!state.templates.length) {
-    target.innerHTML = '<div class="empty-state">저장된 자동 입력이 없습니다.</div>';
+    target.innerHTML = '<div class="empty-state">저장된 퀵 입력이 없습니다.</div>';
     return;
   }
 
@@ -1519,7 +1594,7 @@ function editTemplate(templateId) {
   fillPaymentSelect(els.entryInfo, template.info);
   fillBudgetSelect(els.entryBudget, template.budget || "");
   els.entryMemo.value = template.memo;
-  els.saveTemplate.textContent = "자동 입력 수정 완료";
+  els.saveTemplate.textContent = "퀵 입력 수정 완료";
   showView("entryView");
 }
 
@@ -1545,12 +1620,12 @@ function renderTemplatePickBanner() {
 function deleteTemplate(templateId) {
   const template = state.templates.find((item) => item.id === templateId);
   if (!template) return;
-  if (!confirm(`자동입력 "${template.memo}"을(를) 삭제할까요?`)) return;
+  if (!confirm(`퀵 입력 "${template.memo}"을(를) 삭제할까요?`)) return;
   state.templates = state.templates.filter((item) => item.id !== templateId);
   if (pendingTemplate?.id === templateId) pendingTemplate = null;
   if (editingTemplateId === templateId) {
     editingTemplateId = "";
-    els.saveTemplate.textContent = "자동 입력 저장";
+    els.saveTemplate.textContent = "퀵 입력 저장";
   }
   saveState();
   renderAll();
@@ -1716,8 +1791,10 @@ function renderAnalysis() {
   renderPie(els.minorChart, els.minorLegend, minorTotals);
 
   els.cardTotalList.innerHTML = "";
+  let cardGrandTotal = 0;
   state.cards.forEach((card) => {
     const total = getCardBillingTotal(card, selectedYear, selectedMonth);
+    cardGrandTotal += total;
     const row = document.createElement("div");
     row.className = "card-row";
     row.innerHTML = `
@@ -1729,6 +1806,7 @@ function renderAnalysis() {
     `;
     els.cardTotalList.append(row);
   });
+  if (els.cardPaymentGrandTotal) els.cardPaymentGrandTotal.textContent = formatMoney(cardGrandTotal);
 
   setDelta(els.expenseDelta, sumConsumption(monthEntries) - sumConsumption(previousEntries));
   setDelta(els.incomeDelta, sumIncome(monthEntries) - sumIncome(previousEntries));
@@ -1760,10 +1838,12 @@ function renderBudgetAnalysis() {
         <strong>${escapeHtml(bucket)}</strong>
         <small>배정 + 누적 이월 - 이번 달 사용</small>
       </div>
-      <div><span>배정</span><b>${formatMoney(allocation)}</b></div>
-      <div><span>사용</span><b>${formatMoney(spent)}</b></div>
-      <div><span>이월</span><b>${formatMoney(carryover)}</b></div>
-      <div><span>남은 돈</span><b>${formatMoney(remaining)}</b></div>
+      <div class="budget-metrics">
+        <div><span>배정</span><b>${formatMoney(allocation)}</b></div>
+        <div><span>사용</span><b>${formatMoney(spent)}</b></div>
+        <div><span>이월</span><b>${formatMoney(carryover)}</b></div>
+        <div><span>남은 돈</span><b>${formatMoney(remaining)}</b></div>
+      </div>
     `;
     els.budgetAnalysisList.append(row);
   });
@@ -2051,7 +2131,7 @@ function deleteBudgetBucket(bucket) {
     state.entries.filter((entry) => entry.budget === bucket).length +
     state.templates.filter((template) => template.budget === bucket).length;
   const message = linkedCount
-    ? `"${bucket}" 예산 항목을 삭제할까요? 연결된 입력/자동 입력 ${linkedCount}개의 예산 항목은 미지정으로 바뀝니다.`
+    ? `"${bucket}" 예산 항목을 삭제할까요? 연결된 입력/퀵 입력 ${linkedCount}개의 예산 항목은 미지정으로 바뀝니다.`
     : `"${bucket}" 예산 항목을 삭제할까요?`;
   if (!confirm(message)) return;
 
@@ -2306,6 +2386,10 @@ function entryClass(entry) {
   if (entry.isCardPayment || entry.type === "card-payment") return "card-payment";
   if (entry.syntheticType) return entry.syntheticType;
   return entry.type;
+}
+
+function entryOwnerLabel(entry) {
+  return entry.owner || "사용자 없음";
 }
 
 function sumExpense(entries) {
