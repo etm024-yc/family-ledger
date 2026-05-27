@@ -1878,14 +1878,18 @@ function renderAnalysis() {
 
   els.cardTotalList.innerHTML = "";
   let cardGrandTotal = 0;
-  state.cards.forEach((card) => {
+  const analysisCards = state.cards.filter((card) => card.owner === currentUser);
+  if (!analysisCards.length) {
+    els.cardTotalList.innerHTML = `<div class="empty-state">${escapeHtml(currentUser)} 소유 카드가 없습니다.</div>`;
+  }
+  analysisCards.forEach((card) => {
     const total = getCardBillingTotal(card, selectedYear, selectedMonth);
     cardGrandTotal += total;
     const row = document.createElement("div");
     row.className = "card-row";
     row.innerHTML = `
       <div>
-        <strong>${escapeHtml(card.owner)} · ${escapeHtml(card.name)}</strong>
+        <strong>${escapeHtml(card.name)}</strong>
         <small>소유자별 계산 · 전월 ${card.billingStartDay}일 - 당월 ${Math.max(card.billingStartDay - 1, 1)}일 / 결제 ${card.paymentDay}일</small>
       </div>
       <strong>${formatMoney(total)}</strong>
