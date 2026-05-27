@@ -259,8 +259,11 @@ const els = {
   saveUser: document.querySelector("#saveUser"),
   resetUser: document.querySelector("#resetUser"),
   userList: document.querySelector("#userList"),
+  cardForm: document.querySelector("#cardForm"),
+  cardNameInput: document.querySelector("#cardNameInput"),
+  cardStartDay: document.querySelector("#cardStartDay"),
+  cardPaymentDay: document.querySelector("#cardPaymentDay"),
   cardSettings: document.querySelector("#cardSettings"),
-  addCard: document.querySelector("#addCard"),
   expenseCategoryForm: document.querySelector("#expenseCategoryForm"),
   expenseMajor: document.querySelector("#expenseMajor"),
   expenseMinor: document.querySelector("#expenseMinor"),
@@ -302,6 +305,7 @@ function init() {
   bindEvents();
   resetEntryForm(toDateKey(new Date()));
   resetFixedForm();
+  resetCardForm();
   renderAll();
   setupSettingsFolders();
   showView(loadActiveView(), { skipStore: true });
@@ -502,6 +506,7 @@ function bindEvents() {
   els.saveCurrentUser.addEventListener("click", saveCurrentUser);
   els.userForm.addEventListener("submit", handleUserSubmit);
   els.resetUser.addEventListener("click", resetUserForm);
+  els.cardForm.addEventListener("submit", handleCardSubmit);
   els.resetEntry.addEventListener("click", () => resetEntryForm());
   els.resetFixed.addEventListener("click", () => resetFixedForm());
   els.saveTemplate.addEventListener("click", saveCurrentTemplate);
@@ -523,7 +528,6 @@ function bindEvents() {
     els.dayModal.close();
     if (date) openEntryForDate(date);
   });
-  els.addCard.addEventListener("click", addCard);
   els.cancelTemplatePick.addEventListener("click", cancelTemplatePick);
   bindCategorySuggest("expense");
   bindCategorySuggest("income");
@@ -694,17 +698,16 @@ function setupSettingsFolders() {
     const actions = document.createElement("div");
     actions.className = "settings-folder-actions";
 
-    const list = panel.querySelector(".fixed-list, .budget-setting-list, .user-list, .card-settings, .category-column");
+    const list = getSettingsListElement(panel);
     if (list) {
       const placeholder = document.createComment("settings-list-placeholder");
       list.before(placeholder);
-      const isInputList = list.matches(".budget-setting-list, .card-settings");
-      if (!isInputList) list.classList.add("settings-list-hidden");
+      list.classList.add("settings-list-hidden");
       const listButton = document.createElement("button");
       listButton.className = "ghost-button settings-list-toggle";
       listButton.type = "button";
       listButton.textContent = "목록";
-      listButton.addEventListener("click", () => openSettingsListModal(panel, list, placeholder, !isInputList));
+      listButton.addEventListener("click", () => openSettingsListModal(panel, list, placeholder, true));
       actions.append(listButton);
     }
 
@@ -721,6 +724,12 @@ function setupSettingsFolders() {
       head.append(actions);
     }
   });
+}
+
+function getSettingsListElement(panel) {
+  if (panel.classList.contains("budget-settings-panel")) return panel.querySelector("#monthlyBudgetForm");
+  if (panel.classList.contains("card-settings-panel")) return panel.querySelector("#cardSettings");
+  return panel.querySelector(".fixed-list, .user-list, .category-column");
 }
 
 function confirmDelete(message = "삭제하면 되돌릴 수 없습니다.") {
@@ -2071,6 +2080,31 @@ function renderCards() {
   });
 }
 
+function resetCardForm() {
+  els.cardNameInput.value = "";
+  els.cardStartDay.innerHTML = dayOptions(1);
+  els.cardPaymentDay.innerHTML = dayOptions(25);
+}
+
+function handleCardSubmit(event) {
+  event.preventDefault();
+  const name = els.cardNameInput.value.trim();
+  if (!name) {
+    alert("카드사를 입력해 주세요.");
+    return;
+  }
+  state.cards.push({
+    id: makeId(),
+    name,
+    owner: currentUser,
+    billingStartDay: Number(els.cardStartDay.value || 1),
+    paymentDay: Number(els.cardPaymentDay.value || 25)
+  });
+  saveState();
+  resetCardForm();
+  renderAll();
+}
+
 function renderPaymentSelects() {
   fillPaymentSelect(els.entryInfo, els.entryInfo.value || "현금");
   fillPaymentSelect(els.fixedInfo, els.fixedInfo.value || "계좌이체");
@@ -2109,12 +2143,6 @@ function fillPaymentSelect(select, selected) {
     select.append(option);
   });
   select.value = selected && options.includes(selected) ? selected : options[0];
-}
-
-function addCard() {
-  state.cards.push({ id: makeId(), name: "새 카드", owner: currentUser, billingStartDay: 1, paymentDay: 25 });
-  saveState();
-  renderAll();
 }
 
 function userOptions(selected) {

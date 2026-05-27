@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
   </head>
   <body>
     <div class="app-shell">
@@ -67,8 +67,8 @@
               <div class="form-header">
                 <div class="form-title-row">
                   <h2>입력</h2>
-                  <button class="ghost-button quick-template-button" id="quickTemplateButton" type="button">퀵 입력</button>
                 </div>
+                <button class="ghost-button quick-template-button" id="quickTemplateButton" type="button">퀵 입력</button>
                 <div class="segmented" role="group" aria-label="내역 종류">
                   <button type="button" class="segment active" data-entry-type="expense">지출</button>
                   <button type="button" class="segment" data-entry-type="income">수입</button>
@@ -128,6 +128,19 @@
             <p id="analysisMonthLabel"></p>
           </div>
           <div class="analysis-grid">
+            <article class="analysis-panel delta-panel">
+              <h3>이전 달 대비 변동사항</h3>
+              <div class="delta-grid">
+                <div>
+                  <span>지출</span>
+                  <strong id="expenseDelta">0원</strong>
+                </div>
+                <div>
+                  <span>수입</span>
+                  <strong id="incomeDelta">0원</strong>
+                </div>
+              </div>
+            </article>
             <div class="analysis-pair">
               <article class="analysis-panel">
                 <h3>가장 많은 소비 카테고리</h3>
@@ -147,19 +160,6 @@
             <article class="analysis-panel">
               <h3 class="panel-title-with-total">카드 결제 대금 <span id="cardPaymentGrandTotal">0원</span></h3>
               <div class="card-total-list" id="cardTotalList"></div>
-            </article>
-            <article class="analysis-panel">
-              <h3>이전 달 대비 변동사항</h3>
-              <div class="delta-grid">
-                <div>
-                  <span>지출</span>
-                  <strong id="expenseDelta">0원</strong>
-                </div>
-                <div>
-                  <span>수입</span>
-                  <strong id="incomeDelta">0원</strong>
-                </div>
-              </div>
             </article>
             <article class="analysis-panel budget-analysis-panel">
               <div class="panel-head">
@@ -266,37 +266,25 @@
               </form>
             </article>
 
-            <article class="settings-panel user-settings-panel">
-              <div class="panel-head">
-                <div>
-                  <h2>사용자 설정</h2>
-                  <p class="panel-caption">이 기기에서 입력하는 사람을 선택합니다.</p>
-                </div>
-              </div>
-              <div class="user-current-row">
-                <label>
-                  <span>현재 사용자</span>
-                  <select id="currentUser"></select>
-                </label>
-                <button class="primary-button" id="saveCurrentUser" type="button">저장</button>
-              </div>
-              <form class="inline-form user-form" id="userForm">
-                <input id="editingUserName" type="hidden" />
-                <label>
-                  <span>사용자 이름</span>
-                  <input id="userNameInput" type="text" placeholder="영철" required />
-                </label>
-                <button class="primary-button" id="saveUser" type="submit">추가</button>
-                <button class="ghost-button" id="resetUser" type="button">초기화</button>
-              </form>
-              <div class="user-list" id="userList"></div>
-            </article>
-
-            <article class="settings-panel">
+            <article class="settings-panel card-settings-panel">
               <div class="panel-head">
                 <h2>카드 설정</h2>
-                <button class="icon-button" id="addCard" type="button" title="카드 추가">＋</button>
               </div>
+              <form class="inline-form card-add-form" id="cardForm">
+                <label>
+                  <span>카드사</span>
+                  <input id="cardNameInput" type="text" placeholder="삼성카드" required />
+                </label>
+                <label>
+                  <span>카드 산정일</span>
+                  <select id="cardStartDay"></select>
+                </label>
+                <label>
+                  <span>카드 대금 결제일</span>
+                  <select id="cardPaymentDay"></select>
+                </label>
+                <button class="primary-button" type="submit">카드 추가</button>
+              </form>
               <div class="card-settings" id="cardSettings"></div>
             </article>
 
@@ -341,6 +329,33 @@
                 <div class="category-column" id="incomeCategoryTree"></div>
               </article>
             </div>
+
+            <article class="settings-panel user-settings-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>사용자 설정</h2>
+                  <p class="panel-caption">이 기기에서 입력하는 사람을 선택합니다.</p>
+                </div>
+              </div>
+              <div class="user-current-row">
+                <label>
+                  <span>현재 사용자</span>
+                  <select id="currentUser"></select>
+                </label>
+                <button class="primary-button" id="saveCurrentUser" type="button">저장</button>
+              </div>
+              <form class="inline-form user-form" id="userForm">
+                <input id="editingUserName" type="hidden" />
+                <label>
+                  <span>사용자 이름</span>
+                  <input id="userNameInput" type="text" placeholder="영철" required />
+                </label>
+                <button class="primary-button" id="saveUser" type="submit">추가</button>
+                <button class="ghost-button" id="resetUser" type="button">초기화</button>
+              </form>
+              <div class="user-list" id="userList"></div>
+            </article>
+
 
             <article class="settings-panel data-panel">
               <h2>데이터 관리</h2>
@@ -481,6 +496,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=12"></script>
+    <script src="./app.js?v=13"></script>
   </body>
 </html>
