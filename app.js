@@ -7,6 +7,8 @@ const SYNC_AUTO_KEY = "family-ledger-sync-auto-v1";
 const SYNC_LAST_KEY = "family-ledger-sync-last-v1";
 const SYNC_DEBOUNCE_MS = 1500;
 const viewIds = ["calendarView", "entryView", "analysisView", "settingsView"];
+const LOCAL_CURRENCY_PAYMENT = "지역화폐";
+const LOCAL_CURRENCY_DEFAULT_RATE = 10;
 
 const defaultExpenseCategories = {
   "식비": ["외식", "간식", "카페", "배달", "픽업"],
@@ -230,6 +232,11 @@ const els = {
   cardTotalList: document.querySelector("#cardTotalList"),
   expenseDelta: document.querySelector("#expenseDelta"),
   incomeDelta: document.querySelector("#incomeDelta"),
+  localCurrencyAnalysisBalance: document.querySelector("#localCurrencyAnalysisBalance"),
+  localCurrencyAnalysisSpent: document.querySelector("#localCurrencyAnalysisSpent"),
+  localCurrencyAnalysisCharge: document.querySelector("#localCurrencyAnalysisCharge"),
+  localCurrencyAnalysisBonus: document.querySelector("#localCurrencyAnalysisBonus"),
+  localCurrencyAnalysisSupport: document.querySelector("#localCurrencyAnalysisSupport"),
   budgetAnalysisRange: document.querySelector("#budgetAnalysisRange"),
   budgetAnalysisList: document.querySelector("#budgetAnalysisList"),
   fixedForm: document.querySelector("#fixedForm"),
@@ -251,6 +258,16 @@ const els = {
   monthlyBudgetForm: document.querySelector("#monthlyBudgetForm"),
   monthlyBudgetList: document.querySelector("#monthlyBudgetList"),
   budgetMonthCaption: document.querySelector("#budgetMonthCaption"),
+  localCurrencyBalance: document.querySelector("#localCurrencyBalance"),
+  localCurrencyInitial: document.querySelector("#localCurrencyInitial"),
+  localCurrencyBonusRate: document.querySelector("#localCurrencyBonusRate"),
+  localCurrencySettingsForm: document.querySelector("#localCurrencySettingsForm"),
+  localCurrencyTransactionForm: document.querySelector("#localCurrencyTransactionForm"),
+  localCurrencyDate: document.querySelector("#localCurrencyDate"),
+  localCurrencyKind: document.querySelector("#localCurrencyKind"),
+  localCurrencyAmount: document.querySelector("#localCurrencyAmount"),
+  localCurrencyMemo: document.querySelector("#localCurrencyMemo"),
+  localCurrencyList: document.querySelector("#localCurrencyList"),
   currentUser: document.querySelector("#currentUser"),
   saveCurrentUser: document.querySelector("#saveCurrentUser"),
   userForm: document.querySelector("#userForm"),
@@ -306,6 +323,7 @@ function init() {
   resetEntryForm(toDateKey(new Date()));
   resetFixedForm();
   resetCardForm();
+  resetLocalCurrencyForm();
   renderAll();
   setupSettingsFolders();
   showView(loadActiveView(), { skipStore: true });
@@ -348,6 +366,7 @@ function normalizeState(raw) {
     cards: raw.cards?.length ? raw.cards.map((card) => normalizeCard(card, normalizedUsers)) : clone(defaultCards).map((card) => normalizeCard(card, normalizedUsers)),
     templates: raw.templates?.length ? raw.templates.map((template) => normalizeTemplate(template, normalizedUsers, normalizedBudgetBuckets)) : clone(defaultTemplates).map((template) => normalizeTemplate(template, normalizedUsers, normalizedBudgetBuckets)),
     monthlyBudgets: normalizeMonthlyBudgets(raw.monthlyBudgets, normalizedBudgetBuckets),
+    localCurrency: normalizeLocalCurrency(raw.localCurrency, normalizedUsers),
     updatedAt: raw.updatedAt || ""
   };
 }
@@ -426,6 +445,40 @@ function normalizeMonthlyBudgets(monthlyBudgets = {}, bucketList = getBudgetBuck
   return normalized;
 }
 
+function normalizeLocalCurrency(raw = {}, userList = getUsers()) {
+  const settings = {};
+  userList.forEach((user) => {
+    const userSettings = raw.settings?.[user] || {};
+    settings[user] = {
+      initialBalance: Number(userSettings.initialBalance ?? raw.initialBalances?.[user] ?? 0),
+      bonusRate: Number(userSettings.bonusRate ?? raw.bonusRate ?? LOCAL_CURRENCY_DEFAULT_RATE)
+    };
+  });
+
+  const transactions = (raw.transactions || [])
+    .map((item) => normalizeLocalCurrencyTransaction(item, userList))
+    .filter(Boolean);
+
+  return { settings, transactions };
+}
+
+function normalizeLocalCurrencyTransaction(item, userList = getUsers()) {
+  if (!item || !item.date) return null;
+  const kind = ["charge", "support"].includes(item.kind) ? item.kind : "charge";
+  const amount = Number(item.amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return {
+    id: item.id || makeId(),
+    owner: normalizeOwner(item.owner, userList),
+    date: item.date,
+    kind,
+    amount,
+    bonus: Number(item.bonus || 0),
+    memo: item.memo || "",
+    createdAt: item.createdAt || new Date().toISOString()
+  };
+}
+
 function normalizeCard(card, userList = getUsers()) {
   return {
     id: card.id || makeId(),
@@ -446,6 +499,15 @@ function getUsers() {
 
 function getBudgetBuckets() {
   return state?.budgetBuckets || defaultBudgetBuckets;
+}
+
+function getLocalCurrencySettings(owner = currentUser) {
+  if (!state.localCurrency) state.localCurrency = normalizeLocalCurrency({}, getUsers());
+  if (!state.localCurrency.settings) state.localCurrency.settings = {};
+  if (!state.localCurrency.settings[owner]) {
+    state.localCurrency.settings[owner] = { initialBalance: 0, bonusRate: LOCAL_CURRENCY_DEFAULT_RATE };
+  }
+  return state.localCurrency.settings[owner];
 }
 
 function normalizeOwner(owner, userList = getUsers()) {
@@ -499,6 +561,8 @@ function bindEvents() {
   els.fixedForm.addEventListener("submit", handleFixedSubmit);
   els.budgetBucketForm.addEventListener("submit", handleBudgetBucketSubmit);
   els.monthlyBudgetForm.addEventListener("submit", handleMonthlyBudgetSubmit);
+  els.localCurrencySettingsForm.addEventListener("submit", handleLocalCurrencySettingsSubmit);
+  els.localCurrencyTransactionForm.addEventListener("submit", handleLocalCurrencyTransactionSubmit);
   els.currentUser.addEventListener("change", () => {
     currentUser = els.currentUser.value;
     renderAll();
@@ -673,6 +737,7 @@ function renderAll() {
   renderCalendar();
   renderAnalysis();
   renderMonthlyBudgetSettings();
+  renderLocalCurrencySettings();
   renderFixedEntries();
   renderCards();
   renderCategories();
@@ -729,6 +794,7 @@ function setupSettingsFolders() {
 function getSettingsListElement(panel) {
   if (panel.classList.contains("budget-settings-panel")) return panel.querySelector("#monthlyBudgetForm");
   if (panel.classList.contains("card-settings-panel")) return panel.querySelector("#cardSettings");
+  if (panel.classList.contains("local-currency-settings-panel")) return panel.querySelector("#localCurrencyList");
   return panel.querySelector(".fixed-list, .user-list, .category-column");
 }
 
@@ -919,7 +985,8 @@ async function deleteUser(user) {
   const linkedCount =
     state.entries.filter((entry) => entry.owner === user).length +
     state.cards.filter((card) => card.owner === user).length +
-    state.templates.filter((template) => template.owner === user).length;
+    state.templates.filter((template) => template.owner === user).length +
+    (state.localCurrency?.transactions || []).filter((item) => item.owner === user).length;
   const message = linkedCount
     ? `"${user}"에 연결된 내역, 카드, 퀵 입력 ${linkedCount}개를 "${fallbackUser}" 사용자로 옮기고 삭제할까요?`
     : `"${user}" 사용자를 삭제할까요?`;
@@ -943,9 +1010,16 @@ function resetUserForm() {
 }
 
 function migrateUserOwner(previousName, nextName) {
-  state.entries = state.entries.map((entry) => (entry.owner === previousName ? { ...entry, owner: nextName } : entry));
-  state.cards = state.cards.map((card) => (card.owner === previousName ? { ...card, owner: nextName } : card));
-  state.templates = state.templates.map((template) => (template.owner === previousName ? { ...template, owner: nextName } : template));
+    state.entries = state.entries.map((entry) => (entry.owner === previousName ? { ...entry, owner: nextName } : entry));
+    state.cards = state.cards.map((card) => (card.owner === previousName ? { ...card, owner: nextName } : card));
+    state.templates = state.templates.map((template) => (template.owner === previousName ? { ...template, owner: nextName } : template));
+  if (state.localCurrency?.settings?.[previousName]) {
+    state.localCurrency.settings[nextName] = state.localCurrency.settings[previousName];
+    delete state.localCurrency.settings[previousName];
+  }
+  if (state.localCurrency?.transactions) {
+    state.localCurrency.transactions = state.localCurrency.transactions.map((item) => (item.owner === previousName ? { ...item, owner: nextName } : item));
+  }
 }
 
 function renderSyncSettings() {
@@ -1900,7 +1974,18 @@ function renderAnalysis() {
 
   setDelta(els.expenseDelta, sumConsumption(monthEntries) - sumConsumption(previousEntries));
   setDelta(els.incomeDelta, sumIncome(monthEntries) - sumIncome(previousEntries));
+  renderLocalCurrencyAnalysis();
   renderBudgetAnalysis();
+}
+
+function renderLocalCurrencyAnalysis() {
+  if (!els.localCurrencyAnalysisBalance) return;
+  const summary = getLocalCurrencyMonthSummary(selectedYear, selectedMonth, currentUser);
+  els.localCurrencyAnalysisBalance.textContent = formatMoney(summary.balance);
+  els.localCurrencyAnalysisSpent.textContent = formatMoney(summary.spent);
+  els.localCurrencyAnalysisCharge.textContent = formatMoney(summary.charge);
+  els.localCurrencyAnalysisBonus.textContent = formatMoney(summary.bonus);
+  els.localCurrencyAnalysisSupport.textContent = formatMoney(summary.support);
 }
 
 function renderBudgetAnalysis() {
@@ -1975,6 +2060,66 @@ function getBudgetStartMonth(year, month) {
   });
   const earliest = candidates.sort((a, b) => a - b)[0];
   return { year: earliest.getFullYear(), month: earliest.getMonth() };
+}
+
+function getLocalCurrencyTransactions(owner = currentUser) {
+  return (state.localCurrency?.transactions || []).filter((item) => item.owner === owner);
+}
+
+function getLocalCurrencyTransactionIncrease(item) {
+  return Number(item.amount || 0) + Number(item.bonus || 0);
+}
+
+function getLocalCurrencyStartDate(owner = currentUser) {
+  const dates = [new Date()];
+  getLocalCurrencyTransactions(owner).forEach((item) => dates.push(parseDate(item.date)));
+  state.entries.forEach((entry) => {
+    if (entry.owner === owner && entry.info === LOCAL_CURRENCY_PAYMENT) dates.push(parseDate(entry.startDate || entry.date));
+  });
+  return dates.sort((a, b) => a - b)[0];
+}
+
+function getLocalCurrencyExpenseEntries(start, end, owner = currentUser) {
+  const oneTimeExpenses = state.entries.filter((entry) => entry.type === "expense" && entry.owner === owner && entry.info === LOCAL_CURRENCY_PAYMENT);
+  const fixedExpenses = state.entries
+    .filter((entry) => entry.type === "fixed-expense" && entry.owner === owner && entry.info === LOCAL_CURRENCY_PAYMENT)
+    .flatMap((entry) => monthsInRange(start, end).flatMap(({ year, month }) => expandFixedEntry(entry, year, month)));
+
+  return [...oneTimeExpenses, ...fixedExpenses].filter((entry) => {
+    const date = parseDate(entry.date);
+    return date >= start && date <= end;
+  });
+}
+
+function getLocalCurrencySpentBetween(start, end, owner = currentUser) {
+  return getLocalCurrencyExpenseEntries(start, end, owner).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+}
+
+function getLocalCurrencyBalance(owner = currentUser, asOf = new Date()) {
+  const settings = getLocalCurrencySettings(owner);
+  const end = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate(), 23, 59, 59);
+  const start = getLocalCurrencyStartDate(owner);
+  const added = getLocalCurrencyTransactions(owner)
+    .filter((item) => parseDate(item.date) <= end)
+    .reduce((sum, item) => sum + getLocalCurrencyTransactionIncrease(item), 0);
+  const spent = getLocalCurrencySpentBetween(start, end, owner);
+  return Number(settings.initialBalance || 0) + added - spent;
+}
+
+function getLocalCurrencyMonthSummary(year, month, owner = currentUser) {
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0, 23, 59, 59);
+  const transactions = getLocalCurrencyTransactions(owner).filter((item) => {
+    const date = parseDate(item.date);
+    return date >= start && date <= end;
+  });
+  return {
+    balance: getLocalCurrencyBalance(owner, end),
+    spent: getLocalCurrencySpentBetween(start, end, owner),
+    charge: transactions.filter((item) => item.kind === "charge").reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    bonus: transactions.reduce((sum, item) => sum + Number(item.bonus || 0), 0),
+    support: transactions.filter((item) => item.kind === "support").reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  };
 }
 
 function renderPie(chart, legend, totals) {
@@ -2137,7 +2282,7 @@ function fillBudgetSelect(select, selected = "") {
 }
 
 function fillPaymentSelect(select, selected) {
-  const options = unique([...state.cards.filter((card) => card.owner === currentUser).map((card) => card.name), "현금", "계좌이체", "교통카드"]);
+  const options = unique([...state.cards.filter((card) => card.owner === currentUser).map((card) => card.name), "현금", "계좌이체", "교통카드", LOCAL_CURRENCY_PAYMENT]);
   if (selected && !options.includes(selected)) options.push(selected);
   select.innerHTML = "";
   options.forEach((name) => {
@@ -2190,6 +2335,94 @@ function renderMonthlyBudgetSettings() {
   els.monthlyBudgetList.querySelectorAll("[data-budget-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteBudgetBucket(button.dataset.budgetDelete));
   });
+}
+
+function resetLocalCurrencyForm() {
+  if (!els.localCurrencyDate) return;
+  els.localCurrencyDate.value = toDateKey(new Date());
+  els.localCurrencyKind.value = "charge";
+  els.localCurrencyAmount.value = "";
+  els.localCurrencyMemo.value = "";
+}
+
+function renderLocalCurrencySettings() {
+  if (!els.localCurrencyBalance) return;
+  const settings = getLocalCurrencySettings(currentUser);
+  if (document.activeElement !== els.localCurrencyInitial) els.localCurrencyInitial.value = String(settings.initialBalance || 0);
+  if (document.activeElement !== els.localCurrencyBonusRate) els.localCurrencyBonusRate.value = String(settings.bonusRate ?? LOCAL_CURRENCY_DEFAULT_RATE);
+  els.localCurrencyBalance.textContent = formatMoney(getLocalCurrencyBalance(currentUser));
+  renderLocalCurrencyList();
+}
+
+function renderLocalCurrencyList() {
+  els.localCurrencyList.innerHTML = "";
+  const transactions = getLocalCurrencyTransactions(currentUser).sort((a, b) => b.date.localeCompare(a.date));
+  if (!transactions.length) {
+    els.localCurrencyList.innerHTML = '<div class="empty-state">지역화폐 충전/추가 내역이 없습니다.</div>';
+    return;
+  }
+
+  transactions.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "local-currency-row";
+    row.innerHTML = `
+      <div>
+        <strong>${item.kind === "charge" ? "충전" : "경기기후동행"}</strong>
+        <small>${item.date} · ${escapeHtml(item.memo || "메모 없음")}</small>
+      </div>
+      <div class="local-currency-amounts">
+        <span>${formatMoney(item.amount)}</span>
+        ${item.bonus ? `<small>보너스 ${formatMoney(item.bonus)}</small>` : ""}
+      </div>
+    `;
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "danger-button";
+    deleteButton.type = "button";
+    deleteButton.textContent = "삭제";
+    deleteButton.addEventListener("click", async () => {
+      if (!(await confirmDelete("지역화폐 내역을 삭제합니다."))) return;
+      state.localCurrency.transactions = state.localCurrency.transactions.filter((tx) => tx.id !== item.id);
+      saveState();
+      renderAll();
+    });
+    row.append(deleteButton);
+    els.localCurrencyList.append(row);
+  });
+}
+
+function handleLocalCurrencySettingsSubmit(event) {
+  event.preventDefault();
+  const settings = getLocalCurrencySettings(currentUser);
+  settings.initialBalance = Number(els.localCurrencyInitial.value || 0);
+  settings.bonusRate = Number(els.localCurrencyBonusRate.value || 0);
+  saveState();
+  renderAll();
+  alert("지역화폐 설정을 저장했습니다.");
+}
+
+function handleLocalCurrencyTransactionSubmit(event) {
+  event.preventDefault();
+  const amount = Number(els.localCurrencyAmount.value || 0);
+  if (!els.localCurrencyDate.value || amount <= 0) {
+    alert("날짜와 금액을 입력해 주세요.");
+    return;
+  }
+  const kind = els.localCurrencyKind.value === "support" ? "support" : "charge";
+  const settings = getLocalCurrencySettings(currentUser);
+  const bonus = kind === "charge" ? Math.round(amount * Number(settings.bonusRate || 0) / 100) : 0;
+  state.localCurrency.transactions.push({
+    id: makeId(),
+    owner: currentUser,
+    date: els.localCurrencyDate.value,
+    kind,
+    amount,
+    bonus,
+    memo: els.localCurrencyMemo.value.trim(),
+    createdAt: new Date().toISOString()
+  });
+  saveState();
+  resetLocalCurrencyForm();
+  renderAll();
 }
 
 function handleMonthlyBudgetSubmit(event) {

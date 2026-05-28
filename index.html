@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
   </head>
   <body>
     <div class="app-shell">
@@ -161,6 +161,16 @@
               <h3 class="panel-title-with-total">카드 결제 대금 <span id="cardPaymentGrandTotal">0원</span></h3>
               <div class="card-total-list" id="cardTotalList"></div>
             </article>
+            <article class="analysis-panel local-currency-analysis-panel">
+              <h3>지역화폐 현황</h3>
+              <div class="local-currency-metrics">
+                <div><span>잔액</span><strong id="localCurrencyAnalysisBalance">0원</strong></div>
+                <div><span>이번 달 사용</span><strong id="localCurrencyAnalysisSpent">0원</strong></div>
+                <div><span>충전</span><strong id="localCurrencyAnalysisCharge">0원</strong></div>
+                <div><span>보너스</span><strong id="localCurrencyAnalysisBonus">0원</strong></div>
+                <div><span>경기기후동행</span><strong id="localCurrencyAnalysisSupport">0원</strong></div>
+              </div>
+            </article>
             <article class="analysis-panel budget-analysis-panel">
               <div class="panel-head">
                 <h3>예산 항목 현황</h3>
@@ -286,6 +296,53 @@
                 <button class="primary-button" type="submit">카드 추가</button>
               </form>
               <div class="card-settings" id="cardSettings"></div>
+            </article>
+
+            <article class="settings-panel local-currency-settings-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>지역화폐 설정</h2>
+                  <p class="panel-caption">충전과 지원금은 지출/수입이 아니라 잔액에만 반영됩니다.</p>
+                </div>
+              </div>
+              <div class="local-currency-summary">
+                <span>현재 잔액</span>
+                <strong id="localCurrencyBalance">0원</strong>
+              </div>
+              <form class="inline-form local-currency-settings-form" id="localCurrencySettingsForm">
+                <label>
+                  <span>현재 충전 잔액</span>
+                  <input id="localCurrencyInitial" type="number" min="0" step="1" inputmode="numeric" />
+                </label>
+                <label>
+                  <span>충전 보너스율</span>
+                  <input id="localCurrencyBonusRate" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <button class="primary-button" type="submit">설정 저장</button>
+              </form>
+              <form class="inline-form local-currency-transaction-form" id="localCurrencyTransactionForm">
+                <label>
+                  <span>날짜</span>
+                  <input id="localCurrencyDate" type="date" required />
+                </label>
+                <label>
+                  <span>구분</span>
+                  <select id="localCurrencyKind">
+                    <option value="charge">충전</option>
+                    <option value="support">경기기후동행</option>
+                  </select>
+                </label>
+                <label>
+                  <span>금액</span>
+                  <input id="localCurrencyAmount" type="number" min="0" step="1" inputmode="numeric" required />
+                </label>
+                <label>
+                  <span>메모</span>
+                  <input id="localCurrencyMemo" type="text" placeholder="충전, 지원금" />
+                </label>
+                <button class="primary-button" type="submit">잔액 추가</button>
+              </form>
+              <div class="local-currency-list" id="localCurrencyList"></div>
             </article>
 
             <div class="category-settings-grid">
@@ -496,6 +553,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=14"></script>
+    <script src="./app.js?v=15"></script>
   </body>
 </html>
