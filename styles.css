@@ -1536,11 +1536,12 @@ label {
   .analysis-pair .legend li {
     font-size: 11px;
     gap: 5px;
-    grid-template-columns: 8px minmax(0, 1fr);
+    grid-template-columns: 8px minmax(0, 1fr) auto;
   }
 
   .analysis-pair .legend b {
-    display: none;
+    display: block;
+    font-size: 10px;
   }
 
   .fixed-settings-head {

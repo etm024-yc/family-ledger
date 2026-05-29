@@ -413,11 +413,15 @@ function normalizeBudgetBuckets(rawBuckets, monthlyBudgets = {}, entries = [], t
 function normalizeEntry(entry, userList = getUsers(), bucketList = getBudgetBuckets()) {
   if (!entry || !entry.date) return null;
   const type = entry.type === "fixed" ? "fixed-expense" : entry.type;
+  const owner = normalizeOwner(entry.owner, userList);
+  const createdBy = normalizeOwner(entry.createdBy || entry.owner, userList);
   return {
     ...entry,
     id: entry.id || makeId(),
     type,
-    owner: normalizeOwner(entry.owner, userList),
+    owner,
+    createdBy,
+    modifiedBy: entry.modifiedBy ? normalizeOwner(entry.modifiedBy, userList) : "",
     budget: bucketList.includes(entry.budget) ? entry.budget : "",
     startDate: type.startsWith("fixed-") ? entry.startDate || entry.date : entry.startDate
   };
@@ -515,6 +519,30 @@ function normalizeOwner(owner, userList = getUsers()) {
   if (userList.includes(normalized)) return normalized;
   const current = canonicalUser(currentUser);
   return userList.includes(current) ? current : userList[0];
+}
+
+function withNewEntryMetadata(payload) {
+  const owner = payload.owner || currentUser;
+  return {
+    ...payload,
+    id: makeId(),
+    owner,
+    createdBy: currentUser,
+    createdAt: new Date().toISOString()
+  };
+}
+
+function withEditedEntryMetadata(entry, payload) {
+  const owner = entry.owner || payload.owner || currentUser;
+  return {
+    ...entry,
+    ...payload,
+    id: entry.id,
+    owner,
+    createdBy: entry.createdBy || owner,
+    modifiedBy: currentUser,
+    modifiedAt: new Date().toISOString()
+  };
 }
 
 function ensureCurrentUser(user) {
@@ -983,7 +1011,7 @@ async function deleteUser(user) {
 
   const fallbackUser = users.find((item) => item !== user);
   const linkedCount =
-    state.entries.filter((entry) => entry.owner === user).length +
+    state.entries.filter((entry) => entry.owner === user || entry.createdBy === user || entry.modifiedBy === user).length +
     state.cards.filter((card) => card.owner === user).length +
     state.templates.filter((template) => template.owner === user).length +
     (state.localCurrency?.transactions || []).filter((item) => item.owner === user).length;
@@ -1010,9 +1038,14 @@ function resetUserForm() {
 }
 
 function migrateUserOwner(previousName, nextName) {
-    state.entries = state.entries.map((entry) => (entry.owner === previousName ? { ...entry, owner: nextName } : entry));
-    state.cards = state.cards.map((card) => (card.owner === previousName ? { ...card, owner: nextName } : card));
-    state.templates = state.templates.map((template) => (template.owner === previousName ? { ...template, owner: nextName } : template));
+  state.entries = state.entries.map((entry) => ({
+    ...entry,
+    owner: entry.owner === previousName ? nextName : entry.owner,
+    createdBy: entry.createdBy === previousName ? nextName : entry.createdBy,
+    modifiedBy: entry.modifiedBy === previousName ? nextName : entry.modifiedBy
+  }));
+  state.cards = state.cards.map((card) => (card.owner === previousName ? { ...card, owner: nextName } : card));
+  state.templates = state.templates.map((template) => (template.owner === previousName ? { ...template, owner: nextName } : template));
   if (state.localCurrency?.settings?.[previousName]) {
     state.localCurrency.settings[nextName] = state.localCurrency.settings[previousName];
     delete state.localCurrency.settings[previousName];
@@ -1352,7 +1385,7 @@ function renderDayModalEntries(entries) {
     button.innerHTML = `
       <div>
         <strong>${escapeHtml(entry.memo)}</strong>
-        <small>${escapeHtml(entryOwnerLabel(entry))} · ${typeLabels[entry.syntheticType || entry.type] || typeLabels[entry.type] || ""} · ${escapeHtml(entry.major)} · ${escapeHtml(entry.minor)}${entry.info ? " · " + escapeHtml(entry.info) : ""}${entry.budget ? " · " + escapeHtml(entry.budget) : ""}</small>
+        <small>${escapeHtml(entryUserLabel(entry))} · ${typeLabels[entry.syntheticType || entry.type] || typeLabels[entry.type] || ""} · ${escapeHtml(entry.major)} · ${escapeHtml(entry.minor)}${entry.info ? " · " + escapeHtml(entry.info) : ""}${entry.budget ? " · " + escapeHtml(entry.budget) : ""}</small>
       </div>
       <b>${formatMoney(entry.amount)}</b>
     `;
@@ -1497,9 +1530,9 @@ function handleEntrySubmit(event) {
 
   if (els.editingEntryId.value) {
     const id = els.editingEntryId.value;
-    state.entries = state.entries.map((entry) => (entry.id === id ? { ...entry, ...payload, id } : entry));
+    state.entries = state.entries.map((entry) => (entry.id === id ? withEditedEntryMetadata(entry, payload) : entry));
   } else {
-    state.entries.push({ ...payload, id: makeId(), createdAt: new Date().toISOString() });
+    state.entries.push(withNewEntryMetadata(payload));
   }
 
   selectedDate = parseDate(payload.date);
@@ -1631,8 +1664,7 @@ async function handleModalSubmit(event) {
     const formData = new FormData(els.modalForm);
     state.entries = state.entries.map((entry) => {
       if (entry.id !== id) return entry;
-      return {
-        ...entry,
+      return withEditedEntryMetadata(entry, {
         date: formData.get("date"),
         major: formData.get("major"),
         minor: formData.get("minor"),
@@ -1640,7 +1672,7 @@ async function handleModalSubmit(event) {
         memo: formData.get("memo").trim(),
         info: formData.get("info"),
         budget: formData.get("budget") || ""
-      };
+      });
     });
   }
 
@@ -1683,12 +1715,13 @@ function closeQuickTemplateModal() {
 
 function renderTemplateList(target) {
   target.innerHTML = "";
-  if (!state.templates.length) {
-    target.innerHTML = '<div class="empty-state">저장된 퀵 입력이 없습니다.</div>';
+  const visibleTemplates = state.templates.filter((template) => template.owner === currentUser);
+  if (!visibleTemplates.length) {
+    target.innerHTML = '<div class="empty-state">현재 사용자에게 저장된 퀵 입력이 없습니다.</div>';
     return;
   }
 
-  state.templates.forEach((template) => {
+  visibleTemplates.forEach((template) => {
     target.append(createTemplateCard(template));
   });
 }
@@ -1798,6 +1831,7 @@ function addTemplateEntryForDate(template, date) {
     memo: template.memo,
     info: template.info,
     budget: template.budget || "",
+    createdBy: currentUser,
     createdAt: new Date().toISOString()
   });
   selectedDate = parseDate(date);
@@ -1815,9 +1849,9 @@ function handleFixedSubmit(event) {
   const id = els.fixedEditingId.value;
 
   if (id) {
-    state.entries = state.entries.map((entry) => (entry.id === id ? { ...entry, ...payload, id } : entry));
+    state.entries = state.entries.map((entry) => (entry.id === id ? withEditedEntryMetadata(entry, payload) : entry));
   } else {
-    state.entries.push({ ...payload, id: makeId(), createdAt: new Date().toISOString() });
+    state.entries.push(withNewEntryMetadata(payload));
   }
 
   saveState();
@@ -2731,8 +2765,10 @@ function entryClass(entry) {
   return entry.type;
 }
 
-function entryOwnerLabel(entry) {
-  return entry.owner || "사용자 없음";
+function entryUserLabel(entry) {
+  const createdBy = entry.createdBy || entry.owner || "사용자 없음";
+  if (entry.modifiedBy) return `최초 ${createdBy} · 수정 ${entry.modifiedBy}`;
+  return `최초 ${createdBy}`;
 }
 
 function sumExpense(entries) {
