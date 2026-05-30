@@ -6,6 +6,9 @@ const SYNC_TOKEN_KEY = "family-ledger-sync-token-v1";
 const SYNC_AUTO_KEY = "family-ledger-sync-auto-v1";
 const SYNC_LAST_KEY = "family-ledger-sync-last-v1";
 const SYNC_DEBOUNCE_MS = 1500;
+const APP_RELEASE_VERSION = "v2";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const crc32Table = createCrc32Table();
 const viewIds = ["calendarView", "entryView", "analysisView", "settingsView"];
 const LOCAL_CURRENCY_PAYMENT = "지역화폐";
 const LOCAL_CURRENCY_DEFAULT_RATE = 10;
@@ -210,12 +213,17 @@ const els = {
   settingsListTitle: document.querySelector("#settingsListTitle"),
   settingsListContent: document.querySelector("#settingsListContent"),
   closeSettingsListModal: document.querySelector("#closeSettingsListModal"),
+  analysisDetailModal: document.querySelector("#analysisDetailModal"),
+  analysisDetailTitle: document.querySelector("#analysisDetailTitle"),
+  analysisDetailContent: document.querySelector("#analysisDetailContent"),
+  closeAnalysisDetailModal: document.querySelector("#closeAnalysisDetailModal"),
   deleteConfirmModal: document.querySelector("#deleteConfirmModal"),
   deleteConfirmMessage: document.querySelector("#deleteConfirmMessage"),
   cancelDeleteConfirm: document.querySelector("#cancelDeleteConfirm"),
   confirmDeleteConfirm: document.querySelector("#confirmDeleteConfirm"),
   entryModal: document.querySelector("#entryModal"),
   modalForm: document.querySelector("#modalForm"),
+  modalUserMeta: document.querySelector("#modalUserMeta"),
   modalBody: document.querySelector("#modalBody"),
   dayModal: document.querySelector("#dayModal"),
   dayModalTitle: document.querySelector("#dayModalTitle"),
@@ -303,6 +311,7 @@ const els = {
   quickMajor: document.querySelector("#quickMajor"),
   quickMinor: document.querySelector("#quickMinor"),
   exportData: document.querySelector("#exportData"),
+  exportExcel: document.querySelector("#exportExcel"),
   importData: document.querySelector("#importData"),
   syncUrl: document.querySelector("#syncUrl"),
   syncToken: document.querySelector("#syncToken"),
@@ -606,6 +615,7 @@ function bindEvents() {
   els.closeQuickTemplateModal.addEventListener("click", () => els.quickTemplateModal.close());
   els.closeSettingsListModal.addEventListener("click", () => els.settingsListModal.close());
   els.settingsListModal.addEventListener("close", restoreSettingsListModal);
+  els.closeAnalysisDetailModal.addEventListener("click", () => els.analysisDetailModal.close());
   els.cancelDeleteConfirm.addEventListener("click", () => closeDeleteConfirm(false));
   els.confirmDeleteConfirm.addEventListener("click", () => closeDeleteConfirm(true));
   els.deleteConfirmModal.addEventListener("cancel", (event) => {
@@ -626,6 +636,7 @@ function bindEvents() {
   els.expenseCategoryForm.addEventListener("submit", (event) => handleCategorySubmit(event, "expense"));
   els.incomeCategoryForm.addEventListener("submit", (event) => handleCategorySubmit(event, "income"));
   els.quickCategoryForm.addEventListener("submit", handleQuickCategory);
+  els.exportExcel.addEventListener("click", exportExcel);
   els.exportData.addEventListener("click", exportData);
   els.importData.addEventListener("change", importData);
   els.saveSyncConfig.addEventListener("click", saveSyncConfig);
@@ -1385,7 +1396,7 @@ function renderDayModalEntries(entries) {
     button.innerHTML = `
       <div>
         <strong>${escapeHtml(entry.memo)}</strong>
-        <small>${escapeHtml(entryUserLabel(entry))} · ${typeLabels[entry.syntheticType || entry.type] || typeLabels[entry.type] || ""} · ${escapeHtml(entry.major)} · ${escapeHtml(entry.minor)}${entry.info ? " · " + escapeHtml(entry.info) : ""}${entry.budget ? " · " + escapeHtml(entry.budget) : ""}</small>
+        <small>${typeLabels[entry.syntheticType || entry.type] || typeLabels[entry.type] || ""} · ${escapeHtml(entry.major)} · ${escapeHtml(entry.minor)}${entry.info ? " · " + escapeHtml(entry.info) : ""}${entry.budget ? " · " + escapeHtml(entry.budget) : ""}</small>
       </div>
       <b>${formatMoney(entry.amount)}</b>
     `;
@@ -1504,12 +1515,16 @@ function getCardPaymentEntries(year, month) {
 }
 
 function getCardBillingTotal(card, year, month) {
+  return getCardBillingEntries(card, year, month).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+}
+
+function getCardBillingEntries(card, year, month) {
   const start = new Date(year, month - 1, card.billingStartDay);
   const end = new Date(year, month, card.billingStartDay);
   end.setDate(end.getDate() - 1);
   return getBillableExpenseEntries(start, end)
     .filter((entry) => entry.owner === card.owner && entry.info === card.name)
-    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.memo || "").localeCompare(String(b.memo || "")));
 }
 
 function getBillableExpenseEntries(start, end) {
@@ -1598,6 +1613,7 @@ function openEntryModal(entry) {
   if (!sourceEntry) return;
 
   els.modalBody.innerHTML = "";
+  els.modalUserMeta.textContent = entryUserLabel(sourceEntry);
   els.modalBody.append(createModalFields(sourceEntry));
   els.entryModal.dataset.entryId = sourceEntry.id;
   els.entryModal.showModal();
@@ -1981,8 +1997,14 @@ function renderAnalysis() {
   const topMajor = Object.entries(majorTotals).sort((a, b) => b[1] - a[1])[0]?.[0];
   const minorTotals = totalBy(expenses.filter((entry) => entry.major === topMajor), "minor");
 
-  renderPie(els.majorChart, els.majorLegend, majorTotals);
-  renderPie(els.minorChart, els.minorLegend, minorTotals);
+  renderPie(els.majorChart, els.majorLegend, majorTotals, (major) => {
+    const entries = expenses.filter((entry) => entry.major === major);
+    openAnalysisEntryDetail(`${major} 사용 내역`, entries, ["date", "category", "amount", "info", "budget"]);
+  });
+  renderPie(els.minorChart, els.minorLegend, minorTotals, (minor) => {
+    const entries = expenses.filter((entry) => entry.major === topMajor && entry.minor === minor);
+    openAnalysisEntryDetail(`${topMajor || "소분류"} / ${minor} 사용 내역`, entries, ["date", "category", "amount", "info", "budget"]);
+  });
 
   els.cardTotalList.innerHTML = "";
   let cardGrandTotal = 0;
@@ -1994,7 +2016,10 @@ function renderAnalysis() {
     const total = getCardBillingTotal(card, selectedYear, selectedMonth);
     cardGrandTotal += total;
     const row = document.createElement("div");
-    row.className = "card-row";
+    row.className = "card-row clickable-row";
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `${card.name} 카드 사용내역 보기`);
     row.innerHTML = `
       <div>
         <strong>${escapeHtml(card.name)}</strong>
@@ -2002,6 +2027,17 @@ function renderAnalysis() {
       </div>
       <strong>${formatMoney(total)}</strong>
     `;
+    const openCardDetail = () => {
+      const entries = getCardBillingEntries(card, selectedYear, selectedMonth);
+      openAnalysisEntryDetail(`${card.name} 결제 대금 사용내역`, entries, ["date", "category", "amount", "budget"], getCardBillingRangeLabel(card, selectedYear, selectedMonth));
+    };
+    row.addEventListener("click", openCardDetail);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openCardDetail();
+      }
+    });
     els.cardTotalList.append(row);
   });
   if (els.cardPaymentGrandTotal) els.cardPaymentGrandTotal.textContent = formatMoney(cardGrandTotal);
@@ -2041,7 +2077,10 @@ function renderBudgetAnalysis() {
     const available = allocation + carryover;
     const remaining = available - spent;
     const row = document.createElement("div");
-    row.className = `budget-analysis-row${remaining < 0 ? " negative" : ""}`;
+    row.className = `budget-analysis-row clickable-row${remaining < 0 ? " negative" : ""}`;
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `${bucket} 예산 항목 사용내역 보기`);
     row.innerHTML = `
       <div class="budget-name">
         <strong>${escapeHtml(bucket)}</strong>
@@ -2054,15 +2093,31 @@ function renderBudgetAnalysis() {
         <div><span>남은 돈</span><b>${formatMoney(remaining)}</b></div>
       </div>
     `;
+    const openBudgetDetail = () => {
+      const entries = getBudgetEntriesForMonth(selectedYear, selectedMonth, bucket);
+      openAnalysisEntryDetail(`${bucket} 예산 항목 사용내역`, entries, ["date", "category", "amount", "info", "budget"]);
+    };
+    row.addEventListener("click", openBudgetDetail);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openBudgetDetail();
+      }
+    });
     els.budgetAnalysisList.append(row);
   });
 }
 
 function getBudgetUsageForMonth(year, month, bucket) {
+  return getBudgetEntriesForMonth(year, month, bucket)
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+}
+
+function getBudgetEntriesForMonth(year, month, bucket) {
   return getCountingEntries(getVisibleEntriesForMonth(year, month))
     .filter((entry) => isSameMonth(entry.date, year, month))
     .filter((entry) => isConsumptionEntry(entry) && entry.budget === bucket)
-    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.memo || "").localeCompare(String(b.memo || "")));
 }
 
 function getBudgetCarryover(year, month, bucket) {
@@ -2156,7 +2211,7 @@ function getLocalCurrencyMonthSummary(year, month, owner = currentUser) {
   };
 }
 
-function renderPie(chart, legend, totals) {
+function renderPie(chart, legend, totals, onSelect) {
   const entries = Object.entries(totals).filter(([, value]) => value > 0);
   chart.style.background = "#edf3ee";
   legend.innerHTML = "";
@@ -2180,9 +2235,114 @@ function renderPie(chart, legend, totals) {
 
   entries.forEach(([label, value], index) => {
     const item = document.createElement("li");
+    if (onSelect) {
+      item.classList.add("clickable-legend");
+      item.tabIndex = 0;
+      item.setAttribute("role", "button");
+      item.setAttribute("aria-label", `${label} 사용내역 보기`);
+      item.addEventListener("click", () => onSelect(label));
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(label);
+        }
+      });
+    }
     item.innerHTML = `<i style="background:${palette[index % palette.length]}"></i><span>${escapeHtml(label)}</span><b>${formatMoney(value)}</b>`;
     legend.append(item);
   });
+}
+
+function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRangeLabel(selectedYear, selectedMonth)) {
+  els.analysisDetailTitle.textContent = title;
+  els.analysisDetailContent.innerHTML = "";
+
+  const description = document.createElement("p");
+  description.className = "analysis-detail-caption";
+  description.textContent = `${caption} · 총 ${entries.length}건 · ${formatMoney(entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0))}`;
+  els.analysisDetailContent.append(description);
+
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "해당 내역이 없습니다.";
+    els.analysisDetailContent.append(empty);
+    els.analysisDetailModal.showModal();
+    return;
+  }
+
+  const list = document.createElement("div");
+  list.className = "analysis-detail-list";
+  const templateColumns = getAnalysisDetailGrid(columns);
+  list.append(createAnalysisDetailHeader(columns, templateColumns));
+  entries.forEach((entry) => list.append(createAnalysisDetailRow(entry, columns, templateColumns)));
+  els.analysisDetailContent.append(list);
+  els.analysisDetailModal.showModal();
+}
+
+function createAnalysisDetailHeader(columns, templateColumns) {
+  const row = document.createElement("div");
+  row.className = "analysis-detail-row analysis-detail-head";
+  row.style.gridTemplateColumns = templateColumns;
+  columns.forEach((column) => {
+    const cell = document.createElement("span");
+    cell.textContent = analysisDetailColumnLabel(column);
+    row.append(cell);
+  });
+  return row;
+}
+
+function createAnalysisDetailRow(entry, columns, templateColumns) {
+  const row = document.createElement("div");
+  row.className = "analysis-detail-row";
+  row.style.gridTemplateColumns = templateColumns;
+  columns.forEach((column) => {
+    const cell = document.createElement(column === "amount" ? "b" : "span");
+    cell.textContent = analysisDetailValue(entry, column);
+    row.append(cell);
+  });
+  return row;
+}
+
+function analysisDetailColumnLabel(column) {
+  return {
+    date: "사용 날짜",
+    category: "분류",
+    amount: "금액",
+    info: "정보",
+    budget: "예산항목"
+  }[column] || column;
+}
+
+function analysisDetailValue(entry, column) {
+  if (column === "date") return entry.date || "";
+  if (column === "category") return `${entry.major || "-"} / ${entry.minor || "-"}`;
+  if (column === "amount") return formatMoney(entry.amount);
+  if (column === "info") return entry.info || "-";
+  if (column === "budget") return entry.budget || "미지정";
+  return "";
+}
+
+function getAnalysisDetailGrid(columns) {
+  const sizes = {
+    date: "92px",
+    category: "minmax(130px, 1.2fr)",
+    amount: "minmax(92px, 0.8fr)",
+    info: "minmax(95px, 0.9fr)",
+    budget: "minmax(95px, 0.9fr)"
+  };
+  return columns.map((column) => sizes[column] || "minmax(90px, 1fr)").join(" ");
+}
+
+function getMonthRangeLabel(year, month) {
+  return `${year}년 ${month + 1}월 1일~${daysInMonth(year, month)}일 기준`;
+}
+
+function getCardBillingRangeLabel(card, year, month) {
+  const start = new Date(year, month - 1, card.billingStartDay);
+  const end = new Date(year, month, card.billingStartDay);
+  end.setDate(end.getDate() - 1);
+  return `${toDateKey(start)}~${toDateKey(end)} 사용분`;
 }
 
 function setDelta(element, value) {
@@ -2700,12 +2860,247 @@ function handleQuickCategory(event) {
 
 function exportData() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  downloadBlob(blob, `우리집-가계부-${APP_RELEASE_VERSION}-백업-${toDateKey(new Date())}.json`);
+}
+
+function exportExcel() {
+  const rows = buildLedgerExportRows();
+  if (rows.length <= 1) {
+    alert("엑셀로 내보낼 입력 내역이 없습니다.");
+    return;
+  }
+  const blob = createXlsxBlob(rows);
+  downloadBlob(blob, `우리집-가계부-${APP_RELEASE_VERSION}-내역-${toDateKey(new Date())}.xlsx`);
+}
+
+function buildLedgerExportRows() {
+  const entries = state.entries
+    .filter((entry) => ["expense", "income", "fixed-expense", "fixed-income"].includes(entry.type))
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")) || String(a.memo || "").localeCompare(String(b.memo || "")));
+
+  return [
+    ["날짜", "대분류", "소분류", "금액", "정보", "예산항목", "메모"],
+    ...entries.map((entry) => [
+      entry.date || "",
+      entry.major || "",
+      entry.minor || "",
+      Number(entry.amount || 0),
+      entry.info || "",
+      entry.budget || "",
+      entry.memo || ""
+    ])
+  ];
+}
+
+function createXlsxBlob(rows) {
+  const now = new Date().toISOString();
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`,
+    "docProps/app.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>우리집 가계부</Application>
+</Properties>`,
+    "docProps/core.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>우리집 가계부 내역</dc:title>
+  <dc:creator>우리집 가계부</dc:creator>
+  <cp:lastModifiedBy>우리집 가계부</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>
+</cp:coreProperties>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="내역" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
+    "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>
+  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>
+</styleSheet>`,
+    "xl/worksheets/sheet1.xml": createSheetXml(rows)
+  };
+  return createZipBlob(files, XLSX_MIME);
+}
+
+function createSheetXml(rows) {
+  const widths = [13, 18, 18, 13, 18, 18, 34];
+  const columns = widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("");
+  const sheetRows = rows
+    .map((row, rowIndex) => {
+      const rowNumber = rowIndex + 1;
+      const cells = row.map((value, columnIndex) => createCellXml(value, rowNumber, columnIndex + 1)).join("");
+      return `<row r="${rowNumber}">${cells}</row>`;
+    })
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <cols>${columns}</cols>
+  <sheetData>${sheetRows}</sheetData>
+</worksheet>`;
+}
+
+function createCellXml(value, rowNumber, columnNumber) {
+  const ref = `${columnName(columnNumber)}${rowNumber}`;
+  const style = rowNumber === 1 ? ' s="1"' : "";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `<c r="${ref}"${style}><v>${value}</v></c>`;
+  }
+  return `<c r="${ref}" t="inlineStr"${style}><is><t>${escapeXml(value ?? "")}</t></is></c>`;
+}
+
+function createZipBlob(files, type) {
+  const encoder = new TextEncoder();
+  const parts = [];
+  const centralParts = [];
+  const now = getDosDateTime(new Date());
+  let offset = 0;
+  let centralSize = 0;
+
+  Object.entries(files).forEach(([name, content]) => {
+    const nameBytes = encoder.encode(name);
+    const data = typeof content === "string" ? encoder.encode(content) : content;
+    const crc = crc32(data);
+    const localHeader = createLocalFileHeader(nameBytes, data, crc, now);
+    const centralHeader = createCentralDirectoryHeader(nameBytes, data, crc, now, offset);
+
+    parts.push(localHeader, nameBytes, data);
+    centralParts.push(centralHeader, nameBytes);
+
+    offset += localHeader.length + nameBytes.length + data.length;
+    centralSize += centralHeader.length + nameBytes.length;
+  });
+
+  parts.push(...centralParts, createEndOfCentralDirectory(Object.keys(files).length, centralSize, offset));
+  return new Blob(parts, { type });
+}
+
+function createLocalFileHeader(nameBytes, data, crc, timestamp) {
+  const header = new Uint8Array(30);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, 0x04034b50, true);
+  view.setUint16(4, 20, true);
+  view.setUint16(8, 0, true);
+  view.setUint16(10, timestamp.time, true);
+  view.setUint16(12, timestamp.date, true);
+  view.setUint32(14, crc, true);
+  view.setUint32(18, data.length, true);
+  view.setUint32(22, data.length, true);
+  view.setUint16(26, nameBytes.length, true);
+  return header;
+}
+
+function createCentralDirectoryHeader(nameBytes, data, crc, timestamp, offset) {
+  const header = new Uint8Array(46);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, 0x02014b50, true);
+  view.setUint16(4, 20, true);
+  view.setUint16(6, 20, true);
+  view.setUint16(10, 0, true);
+  view.setUint16(12, timestamp.time, true);
+  view.setUint16(14, timestamp.date, true);
+  view.setUint32(16, crc, true);
+  view.setUint32(20, data.length, true);
+  view.setUint32(24, data.length, true);
+  view.setUint16(28, nameBytes.length, true);
+  view.setUint32(42, offset, true);
+  return header;
+}
+
+function createEndOfCentralDirectory(fileCount, centralSize, centralOffset) {
+  const header = new Uint8Array(22);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, 0x06054b50, true);
+  view.setUint16(8, fileCount, true);
+  view.setUint16(10, fileCount, true);
+  view.setUint32(12, centralSize, true);
+  view.setUint32(16, centralOffset, true);
+  return header;
+}
+
+function getDosDateTime(date) {
+  const year = Math.max(1980, date.getFullYear());
+  return {
+    time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
+  };
+}
+
+function crc32(data) {
+  let crc = 0xffffffff;
+  for (let index = 0; index < data.length; index += 1) {
+    crc = (crc >>> 8) ^ crc32Table[(crc ^ data[index]) & 0xff];
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createCrc32Table() {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+}
+
+function columnName(index) {
+  let name = "";
+  while (index > 0) {
+    const remainder = (index - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    index = Math.floor((index - 1) / 26);
+  }
+  return name;
+}
+
+function escapeXml(value) {
+  return String(value).replace(/[<>&'"]/g, (char) => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    "'": "&apos;",
+    '"': "&quot;"
+  })[char]);
+}
+
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `우리집-가계부-${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}.json`;
+  anchor.download = filename;
+  document.body.append(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function importData(event) {

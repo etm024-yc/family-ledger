@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=1-final" />
+    <link rel="stylesheet" href="./styles.css?v=2" />
   </head>
   <body>
     <div class="app-shell">
@@ -514,6 +514,16 @@
       </div>
     </dialog>
 
+    <dialog class="modal" id="analysisDetailModal">
+      <div class="modal-card analysis-detail-modal-card">
+        <div class="modal-head">
+          <h2 id="analysisDetailTitle">상세 내역</h2>
+          <button class="icon-button" id="closeAnalysisDetailModal" type="button" title="닫기">×</button>
+        </div>
+        <div class="analysis-detail-content" id="analysisDetailContent"></div>
+      </div>
+    </dialog>
+
     <dialog class="modal" id="deleteConfirmModal">
       <div class="modal-card delete-confirm-card">
         <div class="modal-head">
@@ -557,6 +567,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=1-final"></script>
+    <script src="./app.js?v=2"></script>
   </body>
 </html>

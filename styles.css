@@ -745,6 +745,20 @@ label {
   white-space: nowrap;
 }
 
+.clickable-row,
+.clickable-legend {
+  cursor: pointer;
+}
+
+.clickable-row:hover,
+.clickable-legend:hover,
+.clickable-row:focus-visible,
+.clickable-legend:focus-visible {
+  background: var(--green-2);
+  outline: 2px solid #b6d8c4;
+  outline-offset: 2px;
+}
+
 .legend i {
   border-radius: 3px;
   display: block;
@@ -1402,6 +1416,67 @@ label {
 .settings-list-modal-card {
   max-height: min(78vh, 720px);
   overflow: auto;
+}
+
+.analysis-detail-modal-card {
+  max-height: min(82vh, 760px);
+  overflow: auto;
+}
+
+.analysis-detail-content {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.analysis-detail-caption {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.analysis-detail-list {
+  display: grid;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px;
+}
+
+.analysis-detail-row {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 560px;
+  padding: 11px 12px;
+}
+
+.analysis-detail-head {
+  background: #f7fbf8;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.analysis-detail-row span,
+.analysis-detail-row b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-detail-row b {
+  color: var(--ink);
+  text-align: right;
 }
 
 .settings-list-content {
