@@ -5,8 +5,11 @@ const SYNC_URL_KEY = "family-ledger-sync-url-v1";
 const SYNC_TOKEN_KEY = "family-ledger-sync-token-v1";
 const SYNC_AUTO_KEY = "family-ledger-sync-auto-v1";
 const SYNC_LAST_KEY = "family-ledger-sync-last-v1";
+const GUIDE_TODAY_KEY = "family-ledger-guide-hidden-date-v1";
+const GUIDE_DONE_KEY = "family-ledger-guide-dismissed-version-v1";
 const SYNC_DEBOUNCE_MS = 1500;
 const APP_RELEASE_VERSION = "v3";
+const GUIDEBOOK_VERSION = "v3-guide-20260530";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const crc32Table = createCrc32Table();
 const viewIds = ["calendarView", "entryView", "analysisView", "settingsView"];
@@ -217,6 +220,10 @@ const els = {
   analysisDetailTitle: document.querySelector("#analysisDetailTitle"),
   analysisDetailContent: document.querySelector("#analysisDetailContent"),
   closeAnalysisDetailModal: document.querySelector("#closeAnalysisDetailModal"),
+  guideModal: document.querySelector("#guideModal"),
+  guideToday: document.querySelector("#guideToday"),
+  guideDone: document.querySelector("#guideDone"),
+  guideStart: document.querySelector("#guideStart"),
   deleteConfirmModal: document.querySelector("#deleteConfirmModal"),
   deleteConfirmMessage: document.querySelector("#deleteConfirmMessage"),
   cancelDeleteConfirm: document.querySelector("#cancelDeleteConfirm"),
@@ -276,6 +283,7 @@ const els = {
   localCurrencyAmount: document.querySelector("#localCurrencyAmount"),
   localCurrencyMemo: document.querySelector("#localCurrencyMemo"),
   localCurrencyList: document.querySelector("#localCurrencyList"),
+  userPanelCurrent: document.querySelector("#userPanelCurrent"),
   currentUser: document.querySelector("#currentUser"),
   saveCurrentUser: document.querySelector("#saveCurrentUser"),
   userForm: document.querySelector("#userForm"),
@@ -339,6 +347,7 @@ function init() {
   registerServiceWorker();
   syncOnStart();
   setInterval(() => pullSync({ quiet: true, onlyIfRemoteNewer: true }), 10 * 60 * 1000);
+  setTimeout(showGuideOnLaunch, 500);
 }
 
 function loadState() {
@@ -616,6 +625,15 @@ function bindEvents() {
   els.closeSettingsListModal.addEventListener("click", () => els.settingsListModal.close());
   els.settingsListModal.addEventListener("close", restoreSettingsListModal);
   els.closeAnalysisDetailModal.addEventListener("click", () => els.analysisDetailModal.close());
+  els.guideToday?.addEventListener("click", () => {
+    localStorage.setItem(GUIDE_TODAY_KEY, toDateKey(new Date()));
+    els.guideModal.close();
+  });
+  els.guideDone?.addEventListener("click", () => {
+    localStorage.setItem(GUIDE_DONE_KEY, GUIDEBOOK_VERSION);
+    els.guideModal.close();
+  });
+  els.guideStart?.addEventListener("click", () => els.guideModal.close());
   els.cancelDeleteConfirm.addEventListener("click", () => closeDeleteConfirm(false));
   els.confirmDeleteConfirm.addEventListener("click", () => closeDeleteConfirm(true));
   els.deleteConfirmModal.addEventListener("cancel", (event) => {
@@ -818,7 +836,7 @@ function setupSettingsFolders() {
     const folderButton = document.createElement("button");
     folderButton.className = "ghost-button settings-folder-toggle";
     folderButton.type = "button";
-    folderButton.textContent = "열기";
+    folderButton.textContent = getSettingsFolderOpenLabel(panel);
     folderButton.addEventListener("click", () => setSettingsFolder(panel, panel.classList.contains("is-collapsed")));
     actions.append(folderButton);
     const title = head.querySelector(":scope > h2");
@@ -844,6 +862,13 @@ function confirmDelete(message = "삭제하면 되돌릴 수 없습니다.") {
   return new Promise((resolve) => {
     deleteConfirmResolve = resolve;
   });
+}
+
+function showGuideOnLaunch() {
+  if (!els.guideModal || els.guideModal.open) return;
+  if (localStorage.getItem(GUIDE_DONE_KEY) === GUIDEBOOK_VERSION) return;
+  if (localStorage.getItem(GUIDE_TODAY_KEY) === toDateKey(new Date())) return;
+  els.guideModal.showModal();
 }
 
 function closeDeleteConfirm(result) {
@@ -878,7 +903,11 @@ function closeSettingsListModalIfOpen() {
 }
 
 function getSettingsPanelTitle(panel) {
-  return panel.querySelector(":scope > .settings-folder-head h2")?.textContent.trim() || panel.querySelector("h2")?.textContent.trim() || "설정";
+  const title = panel.querySelector(":scope > .settings-folder-head h2") || panel.querySelector("h2");
+  if (!title) return "설정";
+  const badge = title.querySelector(".settings-title-badge");
+  const fullText = title.textContent.trim();
+  return badge ? fullText.replace(badge.textContent.trim(), "").trim() : fullText;
 }
 
 function ensureSettingsFolderHead(panel) {
@@ -907,11 +936,22 @@ function openSettingsFolder(panel) {
 function setSettingsFolder(panel, isOpen) {
   panel.classList.toggle("is-collapsed", !isOpen);
   const button = panel.querySelector(":scope > .settings-folder-head .settings-folder-toggle");
-  if (button) button.textContent = isOpen ? "접기" : "열기";
+  if (button) button.textContent = isOpen ? "접기" : getSettingsFolderOpenLabel(panel);
+}
+
+function getSettingsFolderOpenLabel(panel) {
+  return panel.classList.contains("fixed-settings-panel") ||
+    panel.classList.contains("budget-settings-panel") ||
+    panel.classList.contains("card-settings-panel") ||
+    panel.classList.contains("category-settings-panel") ||
+    panel.classList.contains("user-settings-panel")
+    ? "추가"
+    : "열기";
 }
 
 function renderUserSettings() {
   const users = getUsers();
+  if (els.userPanelCurrent) els.userPanelCurrent.textContent = `현재: ${currentUser}`;
   els.currentUser.innerHTML = "";
   users.forEach((user) => {
     const option = document.createElement("option");
@@ -936,6 +976,13 @@ function renderUserSettings() {
     const actions = document.createElement("div");
     actions.className = "user-actions";
 
+    const selectButton = document.createElement("button");
+    selectButton.className = user === currentUser ? "primary-button" : "ghost-button";
+    selectButton.type = "button";
+    selectButton.textContent = user === currentUser ? "선택됨" : "선택";
+    selectButton.disabled = user === currentUser;
+    selectButton.addEventListener("click", () => selectUserFromList(user));
+
     const editButton = document.createElement("button");
     editButton.className = "ghost-button";
     editButton.type = "button";
@@ -953,10 +1000,17 @@ function renderUserSettings() {
     deleteButton.textContent = "삭제";
     deleteButton.addEventListener("click", () => deleteUser(user));
 
-    actions.append(editButton, deleteButton);
+    actions.append(selectButton, editButton, deleteButton);
     row.append(info, actions);
     els.userList.append(row);
   });
+}
+
+function selectUserFromList(user) {
+  currentUser = ensureCurrentUser(user);
+  localStorage.setItem(USER_KEY, currentUser);
+  closeSettingsListModalIfOpen();
+  renderAll();
 }
 
 function saveCurrentUser() {
@@ -2061,14 +2115,18 @@ function renderLocalCurrencyAnalysis() {
   panel.classList.add("clickable-row");
   panel.tabIndex = 0;
   panel.setAttribute("role", "button");
-  panel.setAttribute("aria-label", "지역화폐 사용내역 보기");
+  panel.setAttribute("aria-label", "지역화폐 사용 및 충전 내역 보기");
   const openDetail = () => {
-    const start = new Date(selectedYear, selectedMonth, 1);
-    const end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59);
-    const entries = getLocalCurrencyExpenseEntries(start, end, currentUser)
-      .filter((entry) => isSameMonth(entry.date, selectedYear, selectedMonth))
-      .sort((a, b) => a.date.localeCompare(b.date) || String(a.memo || "").localeCompare(String(b.memo || "")));
-    openAnalysisEntryDetail("지역화폐 사용 내역", entries, ["date", "category", "amount", "info", "memo", "budget"]);
+    const entries = getLocalCurrencyDetailEntries(selectedYear, selectedMonth, currentUser);
+    const spent = entries.filter((entry) => entry.detailTone === "expense").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    const added = entries.filter((entry) => entry.detailTone === "charge" || entry.detailTone === "support").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    openAnalysisEntryDetail(
+      "지역화폐 사용/충전 내역",
+      entries,
+      ["date", "kind", "category", "amount", "info", "memo", "budget"],
+      getMonthRangeLabel(selectedYear, selectedMonth),
+      `총 ${entries.length}건 / 사용 ${formatMoney(spent)} / 충전·지원 ${formatMoney(added)}`
+    );
   };
   panel.onclick = openDetail;
   panel.onkeydown = (event) => {
@@ -2201,6 +2259,42 @@ function getLocalCurrencyExpenseEntries(start, end, owner = currentUser) {
   });
 }
 
+function getLocalCurrencyDetailEntries(year, month, owner = currentUser) {
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0, 23, 59, 59);
+  const expenses = getLocalCurrencyExpenseEntries(start, end, owner)
+    .filter((entry) => isSameMonth(entry.date, year, month))
+    .map((entry) => ({
+      ...entry,
+      detailKind: "사용",
+      detailTone: "expense"
+    }));
+  const transactions = getLocalCurrencyTransactions(owner)
+    .filter((item) => {
+      const date = parseDate(item.date);
+      return date >= start && date <= end;
+    })
+    .map((item) => {
+      const isSupport = item.kind === "support";
+      const bonusText = !isSupport && item.bonus ? `충전 ${formatMoney(item.amount)} + 보너스 ${formatMoney(item.bonus)}` : "";
+      return {
+        id: item.id,
+        type: "local-currency-transaction",
+        date: item.date,
+        major: "지역화폐",
+        minor: isSupport ? "경기기후동행" : "충전",
+        amount: getLocalCurrencyTransactionIncrease(item),
+        info: isSupport ? "지원금" : "충전",
+        memo: [item.memo, bonusText].filter(Boolean).join(" · ") || "-",
+        budget: "잔액",
+        detailKind: isSupport ? "지원" : "충전",
+        detailTone: isSupport ? "support" : "charge"
+      };
+    });
+
+  return [...expenses, ...transactions].sort((a, b) => a.date.localeCompare(b.date) || String(a.detailKind || "").localeCompare(String(b.detailKind || "")));
+}
+
 function getLocalCurrencySpentBetween(start, end, owner = currentUser) {
   return getLocalCurrencyExpenseEntries(start, end, owner).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
 }
@@ -2274,7 +2368,7 @@ function renderPie(chart, legend, totals, onSelect) {
   });
 }
 
-function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRangeLabel(selectedYear, selectedMonth)) {
+function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRangeLabel(selectedYear, selectedMonth), summaryText = "") {
   els.analysisDetailTitle.textContent = title;
   els.analysisDetailContent.innerHTML = "";
 
@@ -2283,7 +2377,7 @@ function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRang
   const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   description.innerHTML = `
     <span>${escapeHtml(caption)}</span>
-    <strong>총 ${entries.length}건 / ${formatMoney(total)}</strong>
+    <strong>${escapeHtml(summaryText || `총 ${entries.length}건 / ${formatMoney(total)}`)}</strong>
   `;
   els.analysisDetailContent.append(description);
 
@@ -2299,7 +2393,6 @@ function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRang
   const list = document.createElement("div");
   list.className = "analysis-detail-list";
   const templateColumns = getAnalysisDetailGrid(columns);
-  list.append(createAnalysisDetailHeader(columns, templateColumns));
   entries.forEach((entry) => list.append(createAnalysisDetailRow(entry, columns, templateColumns)));
   els.analysisDetailContent.append(list);
   els.analysisDetailModal.showModal();
@@ -2319,11 +2412,18 @@ function createAnalysisDetailHeader(columns, templateColumns) {
 
 function createAnalysisDetailRow(entry, columns, templateColumns) {
   const row = document.createElement("div");
-  row.className = "analysis-detail-row";
-  row.style.gridTemplateColumns = templateColumns;
+  row.className = `analysis-detail-row${entry.detailTone ? ` analysis-detail-${entry.detailTone}` : ""}`;
+  row.style.setProperty("--analysis-detail-columns", templateColumns);
   columns.forEach((column) => {
-    const cell = document.createElement(column === "amount" ? "b" : "span");
-    cell.textContent = analysisDetailValue(entry, column);
+    const cell = document.createElement("div");
+    cell.className = `analysis-detail-cell analysis-detail-cell-${column}`;
+    const label = document.createElement("span");
+    label.className = "analysis-detail-cell-label";
+    label.textContent = analysisDetailColumnLabel(column);
+    const value = document.createElement(column === "amount" ? "strong" : "b");
+    value.className = "analysis-detail-cell-value";
+    value.textContent = analysisDetailValue(entry, column);
+    cell.append(label, value);
     row.append(cell);
   });
   return row;
@@ -2332,6 +2432,7 @@ function createAnalysisDetailRow(entry, columns, templateColumns) {
 function analysisDetailColumnLabel(column) {
   return {
     date: "사용 날짜",
+    kind: "구분",
     category: "분류",
     amount: "금액",
     info: "정보",
@@ -2342,8 +2443,14 @@ function analysisDetailColumnLabel(column) {
 
 function analysisDetailValue(entry, column) {
   if (column === "date") return formatShortMonthDay(entry.date);
+  if (column === "kind") return entry.detailKind || typeLabels[entry.type] || "-";
   if (column === "category") return `${entry.major || "-"} / ${entry.minor || "-"}`;
-  if (column === "amount") return formatMoney(entry.amount);
+  if (column === "amount") {
+    const money = formatMoney(entry.amount);
+    if (entry.detailTone === "charge" || entry.detailTone === "support") return `+${money}`;
+    if (entry.detailTone === "expense") return `-${money}`;
+    return money;
+  }
   if (column === "info") return entry.info || "-";
   if (column === "memo") return entry.memo || "-";
   if (column === "budget") return entry.budget || "미지정";
@@ -2351,15 +2458,8 @@ function analysisDetailValue(entry, column) {
 }
 
 function getAnalysisDetailGrid(columns) {
-  const sizes = {
-    date: "36px",
-    category: "minmax(54px, 1.2fr)",
-    amount: "68px",
-    info: "minmax(42px, 0.8fr)",
-    memo: "minmax(48px, 1fr)",
-    budget: "minmax(42px, 0.8fr)"
-  };
-  return columns.map((column) => sizes[column] || "minmax(90px, 1fr)").join(" ");
+  const count = columns.length <= 2 ? columns.length : columns.length <= 4 ? 2 : 3;
+  return `repeat(${count}, minmax(0, 1fr))`;
 }
 
 function getMonthRangeLabel(year, month) {

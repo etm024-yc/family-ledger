@@ -1025,6 +1025,18 @@ label {
   margin-left: auto;
 }
 
+.settings-title-badge {
+  background: var(--green-2);
+  border-radius: 999px;
+  color: var(--green);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  margin-left: 6px;
+  padding: 5px 9px;
+  vertical-align: middle;
+}
+
 .fixed-settings-head h2 {
   order: 1;
 }
@@ -1077,6 +1089,10 @@ label {
 
 .user-form {
   grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.user-current-row-hidden {
+  display: none;
 }
 
 .user-current-row label,
@@ -1418,6 +1434,43 @@ label {
   overflow: auto;
 }
 
+.guide-modal-card {
+  max-height: min(86vh, 760px);
+  overflow: auto;
+}
+
+.guide-content {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.guide-content section {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.guide-content h3 {
+  margin-bottom: 6px;
+}
+
+.guide-content p {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.guide-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
 .analysis-detail-modal-card {
   max-height: min(82vh, 760px);
   overflow: auto;
@@ -1450,21 +1503,22 @@ label {
 
 .analysis-detail-list {
   display: grid;
-  gap: 8px;
-  overflow-x: visible;
+  gap: 10px;
+  overflow-x: hidden;
   padding: 2px;
 }
 
 .analysis-detail-row {
-  align-items: center;
-  background: var(--surface-2);
+  align-items: stretch;
+  background: linear-gradient(135deg, #f8fbf8, #ffffff);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  font-size: 11px;
-  gap: 4px;
+  gap: 6px;
+  grid-template-columns: var(--analysis-detail-columns, repeat(3, minmax(0, 1fr)));
   min-width: 0;
   padding: 8px;
+  text-align: center;
 }
 
 .analysis-detail-head {
@@ -1474,17 +1528,66 @@ label {
   font-weight: 900;
 }
 
-.analysis-detail-row span,
-.analysis-detail-row b {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.analysis-detail-expense {
+  background: linear-gradient(135deg, #fff7f6, #ffffff);
+  border-color: #f0beb9;
 }
 
-.analysis-detail-row b {
+.analysis-detail-charge {
+  background: linear-gradient(135deg, #f3f8ff, #ffffff);
+  border-color: #c7d9f5;
+}
+
+.analysis-detail-support {
+  background: linear-gradient(135deg, #f2fbf5, #ffffff);
+  border-color: #c4dfce;
+}
+
+.analysis-detail-cell {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(217, 226, 220, 0.7);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  min-width: 0;
+  padding: 7px 5px;
+}
+
+.analysis-detail-cell-label {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.analysis-detail-cell-value {
   color: var(--ink);
-  text-align: right;
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.28;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.analysis-detail-cell-amount .analysis-detail-cell-value {
+  font-size: 13px;
+}
+
+.analysis-detail-expense .analysis-detail-cell-amount .analysis-detail-cell-value {
+  color: var(--red);
+}
+
+.analysis-detail-charge .analysis-detail-cell-amount .analysis-detail-cell-value {
+  color: var(--blue);
+}
+
+.analysis-detail-support .analysis-detail-cell-amount .analysis-detail-cell-value {
+  color: var(--green);
 }
 
 .settings-list-content {
@@ -1700,6 +1803,14 @@ label {
   .fixed-settings-head .segmented {
     flex-basis: auto;
     width: 100%;
+  }
+
+  .analysis-detail-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guide-actions {
+    grid-template-columns: 1fr;
   }
 }
 

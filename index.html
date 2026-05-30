@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=3" />
+    <link rel="stylesheet" href="./styles.css?v=3-guide" />
   </head>
   <body>
     <div class="app-shell">
@@ -390,11 +390,11 @@
             <article class="settings-panel user-settings-panel">
               <div class="panel-head">
                 <div>
-                  <h2>사용자 설정</h2>
+                  <h2>사용자 설정 <span class="settings-title-badge" id="userPanelCurrent">현재: 영철</span></h2>
                   <p class="panel-caption">이 기기에서 입력하는 사람을 선택합니다.</p>
                 </div>
               </div>
-              <div class="user-current-row">
+              <div class="user-current-row user-current-row-hidden">
                 <label>
                   <span>현재 사용자</span>
                   <select id="currentUser"></select>
@@ -524,6 +524,45 @@
       </div>
     </dialog>
 
+    <dialog class="modal" id="guideModal">
+      <div class="modal-card guide-modal-card">
+        <div class="modal-head">
+          <h2>우리집 가계부 가이드</h2>
+        </div>
+        <div class="guide-content">
+          <section>
+            <h3>처음 시작</h3>
+            <p>설정의 사용자 설정에서 현재 입력자를 선택합니다. 카드와 지역화폐는 선택한 사용자 기준으로 따로 관리되고, 지출/수입 내역은 함께 볼 수 있습니다.</p>
+          </section>
+          <section>
+            <h3>입력</h3>
+            <p>지출 또는 수입을 고르고 날짜, 분류, 금액, 정보, 예산 항목, 메모를 입력합니다. 자주 쓰는 내역은 퀵 입력으로 저장해 달력 날짜만 골라 빠르게 추가할 수 있습니다.</p>
+          </section>
+          <section>
+            <h3>달력</h3>
+            <p>날짜 칸을 누르면 그날의 내역이 팝업으로 열립니다. 일반 내역은 누르면 바로 수정할 수 있고, 고정 내역은 설정의 고정 내역 수정 화면으로 이동합니다.</p>
+          </section>
+          <section>
+            <h3>분석</h3>
+            <p>월별 지출 변화, 소비 카테고리, 카드 결제 대금, 지역화폐 잔액, 예산 항목 현황을 확인합니다. 카드, 카테고리, 예산, 지역화폐 항목을 누르면 해당 월 상세 내역이 열립니다.</p>
+          </section>
+          <section>
+            <h3>설정</h3>
+            <p>고정 내역, 월별 예산, 카드, 지역화폐, 카테고리, 사용자를 관리합니다. 목록 버튼은 저장된 항목을 보고 수정할 때, 추가 버튼은 새 항목을 입력할 때 사용합니다.</p>
+          </section>
+          <section>
+            <h3>백업과 동기화</h3>
+            <p>데이터 관리에서 JSON 백업과 엑셀 내보내기를 사용할 수 있습니다. 동기화 설정을 완료하면 앱 시작 시와 10분마다 공유 데이터가 자동으로 갱신됩니다.</p>
+          </section>
+        </div>
+        <div class="guide-actions">
+          <button class="ghost-button" id="guideToday" type="button">오늘은 그만 볼래요</button>
+          <button class="ghost-button" id="guideDone" type="button">이제 가이드가 없어도 돼요</button>
+          <button class="primary-button" id="guideStart" type="button">사용 시작</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog class="modal" id="deleteConfirmModal">
       <div class="modal-card delete-confirm-card">
         <div class="modal-head">
@@ -567,6 +606,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=3"></script>
+    <script src="./app.js?v=3-guide"></script>
   </body>
 </html>
