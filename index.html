@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=3-ai-sync" />
+    <link rel="stylesheet" href="./styles.css?v=3-help-fix" />
   </head>
   <body>
     <div class="app-shell">
@@ -41,6 +41,9 @@
 
       <main>
         <section class="view active" id="calendarView" aria-label="달력">
+          <div class="view-help-row">
+            <button class="help-button" data-guide-view="calendarView" type="button" title="달력 가이드">?</button>
+          </div>
           <div class="summary-strip">
             <div class="metric expense">
               <span>지출</span>
@@ -62,6 +65,9 @@
         </section>
 
         <section class="view" id="entryView" aria-label="입력">
+          <div class="view-help-row">
+            <button class="help-button" data-guide-view="entryView" type="button" title="입력 가이드">?</button>
+          </div>
           <div class="entry-layout">
             <form class="entry-form" id="entryForm">
               <div class="form-header">
@@ -123,6 +129,9 @@
         </section>
 
         <section class="view" id="analysisView" aria-label="분석">
+          <div class="view-help-row">
+            <button class="help-button" data-guide-view="analysisView" type="button" title="분석 가이드">?</button>
+          </div>
           <div class="analysis-header">
             <div class="analysis-title-row">
               <h2>분석</h2>
@@ -194,6 +203,9 @@
         </section>
 
         <section class="view" id="settingsView" aria-label="설정">
+          <div class="view-help-row">
+            <button class="help-button" data-guide-view="settingsView" type="button" title="설정 가이드">?</button>
+          </div>
           <div class="settings-grid">
             <article class="settings-panel fixed-settings-panel">
               <div class="panel-head fixed-settings-head">
@@ -607,6 +619,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=3-ai-sync"></script>
+    <script src="./app.js?v=3-help-fix"></script>
   </body>
 </html>

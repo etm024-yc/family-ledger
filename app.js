@@ -182,6 +182,7 @@ let activeSettingsList = null;
 let deleteConfirmResolve = null;
 let guideStepIndex = 0;
 let activeGuideTarget = null;
+let activeGuideSteps = [];
 
 const els = {
   yearSelect: document.querySelector("#yearSelect"),
@@ -753,9 +754,13 @@ function bindEvents() {
   els.closeAnalysisDetailModal.addEventListener("click", () => els.analysisDetailModal.close());
   els.guideNo?.addEventListener("click", () => els.guideModal.close());
   els.guideYes?.addEventListener("click", startGuideTour);
+  document.querySelectorAll("[data-guide-view]").forEach((button) => {
+    button.addEventListener("click", () => startGuideTour(button.dataset.guideView));
+  });
   els.guideTourPrev?.addEventListener("click", () => showGuideStep(guideStepIndex - 1));
   els.guideTourNext?.addEventListener("click", () => {
-    if (guideStepIndex >= guideSteps.length - 1) {
+    const steps = activeGuideSteps.length ? activeGuideSteps : guideSteps;
+    if (guideStepIndex >= steps.length - 1) {
       endGuideTour();
       return;
     }
@@ -1003,9 +1008,12 @@ function showGuideOnLaunch() {
   els.guideModal.showModal();
 }
 
-function startGuideTour() {
+function startGuideTour(viewId = "") {
   if (els.guideModal?.open) els.guideModal.close();
   if (!els.guideTour) return;
+  closeGuideBlockingDialogs();
+  activeGuideSteps = viewId ? guideSteps.filter((step) => step.view === viewId) : [...guideSteps];
+  if (!activeGuideSteps.length) activeGuideSteps = [...guideSteps];
   els.guideTour.hidden = false;
   document.body.classList.add("guide-tour-active");
   showGuideStep(0);
@@ -1013,26 +1021,33 @@ function startGuideTour() {
 
 function showGuideStep(index) {
   if (!els.guideTour || els.guideTour.hidden) return;
-  guideStepIndex = Math.max(0, Math.min(index, guideSteps.length - 1));
-  const step = guideSteps[guideStepIndex];
+  const steps = activeGuideSteps.length ? activeGuideSteps : guideSteps;
+  guideStepIndex = Math.max(0, Math.min(index, steps.length - 1));
+  const step = steps[guideStepIndex];
   if (step.view) showView(step.view, { skipStore: true });
-  closeSettingsListModalIfOpen();
-  if (els.analysisDetailModal?.open) els.analysisDetailModal.close();
-  if (els.dayModal?.open) els.dayModal.close();
-  if (els.quickTemplateModal?.open) els.quickTemplateModal.close();
+  closeGuideBlockingDialogs();
 
-  els.guideTourStep.textContent = `${guideStepIndex + 1} / ${guideSteps.length}`;
+  els.guideTourStep.textContent = `${guideStepIndex + 1} / ${steps.length}`;
   els.guideTourTitle.textContent = step.title;
   els.guideTourText.textContent = step.text;
   els.guideTourPrev.disabled = guideStepIndex === 0;
-  els.guideTourNext.textContent = guideStepIndex === guideSteps.length - 1 ? "완료" : "다음";
+  els.guideTourNext.textContent = guideStepIndex === steps.length - 1 ? "완료" : "다음";
 
   window.setTimeout(positionGuideStep, 120);
 }
 
+function closeGuideBlockingDialogs() {
+  closeSettingsListModalIfOpen();
+  document.querySelectorAll("dialog[open]").forEach((dialog) => {
+    if (dialog === els.guideModal) return;
+    dialog.close();
+  });
+}
+
 function positionGuideStep() {
   if (!els.guideTour || els.guideTour.hidden) return;
-  const step = guideSteps[guideStepIndex];
+  const steps = activeGuideSteps.length ? activeGuideSteps : guideSteps;
+  const step = steps[guideStepIndex];
   let target = document.querySelector(step.selector);
   if (!target) target = document.querySelector(".bottom-nav") || document.body;
 
@@ -1073,6 +1088,7 @@ function endGuideTour() {
   document.body.classList.remove("guide-tour-active");
   if (activeGuideTarget) activeGuideTarget.classList.remove("guide-target-active");
   activeGuideTarget = null;
+  activeGuideSteps = [];
 }
 
 function closeDeleteConfirm(result) {

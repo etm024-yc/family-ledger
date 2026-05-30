@@ -190,10 +190,32 @@ main {
 
 .view {
   display: none;
+  position: relative;
 }
 
 .view.active {
   display: block;
+}
+
+.view-help-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.help-button {
+  align-items: center;
+  background: var(--green-2);
+  border: 1px solid #badbc9;
+  border-radius: 999px;
+  color: var(--green);
+  display: inline-flex;
+  font-size: 16px;
+  font-weight: 900;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+  width: 34px;
 }
 
 .summary-strip {
@@ -1578,9 +1600,9 @@ label {
 
 .guide-tour {
   inset: 0;
-  pointer-events: none;
+  pointer-events: auto;
   position: fixed;
-  z-index: 80;
+  z-index: 1000;
 }
 
 .guide-tour-highlight {
@@ -1641,11 +1663,6 @@ label {
   gap: 8px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 14px;
-}
-
-.guide-tour-active .guide-target-active {
-  position: relative;
-  z-index: 82;
 }
 
 .analysis-detail-modal-card {

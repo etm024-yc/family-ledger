@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-ledger-cache-v3-ai-sync";
+const CACHE_NAME = "family-ledger-cache-v3-help-fix";
 const ASSETS = [
   "./",
   "./index.html",
