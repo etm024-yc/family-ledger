@@ -6,7 +6,7 @@ const SYNC_TOKEN_KEY = "family-ledger-sync-token-v1";
 const SYNC_AUTO_KEY = "family-ledger-sync-auto-v1";
 const SYNC_LAST_KEY = "family-ledger-sync-last-v1";
 const SYNC_DEBOUNCE_MS = 1500;
-const APP_RELEASE_VERSION = "v2";
+const APP_RELEASE_VERSION = "v3";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const crc32Table = createCrc32Table();
 const viewIds = ["calendarView", "entryView", "analysisView", "settingsView"];
@@ -1999,11 +1999,11 @@ function renderAnalysis() {
 
   renderPie(els.majorChart, els.majorLegend, majorTotals, (major) => {
     const entries = expenses.filter((entry) => entry.major === major);
-    openAnalysisEntryDetail(`${major} 사용 내역`, entries, ["date", "category", "amount", "info", "budget"]);
+    openAnalysisEntryDetail(`${major} 사용 내역`, entries, ["date", "category", "amount", "info", "memo", "budget"]);
   });
   renderPie(els.minorChart, els.minorLegend, minorTotals, (minor) => {
     const entries = expenses.filter((entry) => entry.major === topMajor && entry.minor === minor);
-    openAnalysisEntryDetail(`${topMajor || "소분류"} / ${minor} 사용 내역`, entries, ["date", "category", "amount", "info", "budget"]);
+    openAnalysisEntryDetail(`${topMajor || "소분류"} / ${minor} 사용 내역`, entries, ["date", "category", "amount", "info", "memo", "budget"]);
   });
 
   els.cardTotalList.innerHTML = "";
@@ -2029,7 +2029,7 @@ function renderAnalysis() {
     `;
     const openCardDetail = () => {
       const entries = getCardBillingEntries(card, selectedYear, selectedMonth);
-      openAnalysisEntryDetail(`${card.name} 결제 대금 사용내역`, entries, ["date", "category", "amount", "budget"], getCardBillingRangeLabel(card, selectedYear, selectedMonth));
+      openAnalysisEntryDetail(`${card.name} 결제 대금 사용내역`, entries, ["date", "category", "amount", "info", "memo", "budget"], getCardBillingRangeLabel(card, selectedYear, selectedMonth));
     };
     row.addEventListener("click", openCardDetail);
     row.addEventListener("keydown", (event) => {
@@ -2056,6 +2056,27 @@ function renderLocalCurrencyAnalysis() {
   els.localCurrencyAnalysisCharge.textContent = formatMoney(summary.charge);
   els.localCurrencyAnalysisBonus.textContent = formatMoney(summary.bonus);
   els.localCurrencyAnalysisSupport.textContent = formatMoney(summary.support);
+  const panel = document.querySelector(".local-currency-analysis-panel");
+  if (!panel) return;
+  panel.classList.add("clickable-row");
+  panel.tabIndex = 0;
+  panel.setAttribute("role", "button");
+  panel.setAttribute("aria-label", "지역화폐 사용내역 보기");
+  const openDetail = () => {
+    const start = new Date(selectedYear, selectedMonth, 1);
+    const end = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59);
+    const entries = getLocalCurrencyExpenseEntries(start, end, currentUser)
+      .filter((entry) => isSameMonth(entry.date, selectedYear, selectedMonth))
+      .sort((a, b) => a.date.localeCompare(b.date) || String(a.memo || "").localeCompare(String(b.memo || "")));
+    openAnalysisEntryDetail("지역화폐 사용 내역", entries, ["date", "category", "amount", "info", "memo", "budget"]);
+  };
+  panel.onclick = openDetail;
+  panel.onkeydown = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openDetail();
+    }
+  };
 }
 
 function renderBudgetAnalysis() {
@@ -2095,7 +2116,7 @@ function renderBudgetAnalysis() {
     `;
     const openBudgetDetail = () => {
       const entries = getBudgetEntriesForMonth(selectedYear, selectedMonth, bucket);
-      openAnalysisEntryDetail(`${bucket} 예산 항목 사용내역`, entries, ["date", "category", "amount", "info", "budget"]);
+      openAnalysisEntryDetail(`${bucket} 예산 항목 사용내역`, entries, ["date", "category", "amount", "info", "memo", "budget"]);
     };
     row.addEventListener("click", openBudgetDetail);
     row.addEventListener("keydown", (event) => {
@@ -2259,7 +2280,11 @@ function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRang
 
   const description = document.createElement("p");
   description.className = "analysis-detail-caption";
-  description.textContent = `${caption} · 총 ${entries.length}건 · ${formatMoney(entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0))}`;
+  const total = entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  description.innerHTML = `
+    <span>${escapeHtml(caption)}</span>
+    <strong>총 ${entries.length}건 / ${formatMoney(total)}</strong>
+  `;
   els.analysisDetailContent.append(description);
 
   if (!entries.length) {
@@ -2310,39 +2335,49 @@ function analysisDetailColumnLabel(column) {
     category: "분류",
     amount: "금액",
     info: "정보",
+    memo: "메모",
     budget: "예산항목"
   }[column] || column;
 }
 
 function analysisDetailValue(entry, column) {
-  if (column === "date") return entry.date || "";
+  if (column === "date") return formatShortMonthDay(entry.date);
   if (column === "category") return `${entry.major || "-"} / ${entry.minor || "-"}`;
   if (column === "amount") return formatMoney(entry.amount);
   if (column === "info") return entry.info || "-";
+  if (column === "memo") return entry.memo || "-";
   if (column === "budget") return entry.budget || "미지정";
   return "";
 }
 
 function getAnalysisDetailGrid(columns) {
   const sizes = {
-    date: "92px",
-    category: "minmax(130px, 1.2fr)",
-    amount: "minmax(92px, 0.8fr)",
-    info: "minmax(95px, 0.9fr)",
-    budget: "minmax(95px, 0.9fr)"
+    date: "36px",
+    category: "minmax(54px, 1.2fr)",
+    amount: "68px",
+    info: "minmax(42px, 0.8fr)",
+    memo: "minmax(48px, 1fr)",
+    budget: "minmax(42px, 0.8fr)"
   };
   return columns.map((column) => sizes[column] || "minmax(90px, 1fr)").join(" ");
 }
 
 function getMonthRangeLabel(year, month) {
-  return `${year}년 ${month + 1}월 1일~${daysInMonth(year, month)}일 기준`;
+  return `${year}년 ${month + 1}월 1일 ~ ${daysInMonth(year, month)}일 기준`;
 }
 
 function getCardBillingRangeLabel(card, year, month) {
   const start = new Date(year, month - 1, card.billingStartDay);
   const end = new Date(year, month, card.billingStartDay);
   end.setDate(end.getDate() - 1);
-  return `${toDateKey(start)}~${toDateKey(end)} 사용분`;
+  return `${start.getFullYear()}년 ${start.getMonth() + 1}월 ${start.getDate()}일 ~ ${end.getMonth() + 1}월 ${end.getDate()}일 사용분`;
+}
+
+function formatShortMonthDay(dateKey) {
+  if (!dateKey) return "";
+  const date = parseDate(dateKey);
+  if (Number.isNaN(date.getTime())) return dateKey;
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 function setDelta(element, value) {

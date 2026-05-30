@@ -1434,6 +1434,8 @@ label {
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--muted);
+  display: grid;
+  gap: 4px;
   font-size: 13px;
   font-weight: 900;
   line-height: 1.45;
@@ -1441,10 +1443,15 @@ label {
   padding: 10px 12px;
 }
 
+.analysis-detail-caption strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
 .analysis-detail-list {
   display: grid;
   gap: 8px;
-  overflow-x: auto;
+  overflow-x: visible;
   padding: 2px;
 }
 
@@ -1454,15 +1461,16 @@ label {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 10px;
-  min-width: 560px;
-  padding: 11px 12px;
+  font-size: 11px;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
 }
 
 .analysis-detail-head {
   background: #f7fbf8;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 900;
 }
 
