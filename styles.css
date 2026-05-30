@@ -169,13 +169,18 @@ button:focus-visible {
   background: var(--blue-2);
   border-color: #c9d9f4;
   color: var(--blue);
+  cursor: pointer;
   position: relative;
+  white-space: nowrap;
 }
 
 .file-button input {
+  cursor: pointer;
+  height: 100%;
   inset: 0;
   opacity: 0;
   position: absolute;
+  width: 100%;
 }
 
 main {
@@ -652,6 +657,22 @@ label {
   min-width: 0;
 }
 
+.analysis-pair .chart-row {
+  align-items: center;
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.analysis-pair .pie-chart {
+  max-width: 150px;
+  width: min(150px, 72%);
+}
+
+.analysis-pair .legend {
+  margin-top: 10px;
+  width: 100%;
+}
+
 .panel-title-with-total {
   align-items: center;
   display: flex;
@@ -713,11 +734,29 @@ label {
   grid-template-columns: 12px minmax(0, 1fr) auto;
 }
 
+.legend li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend li b {
+  white-space: nowrap;
+}
+
 .legend i {
   border-radius: 3px;
   display: block;
   height: 12px;
   width: 12px;
+}
+
+.data-panel .form-actions > button,
+.data-panel .form-actions > .file-button {
+  flex: 1 1 150px;
+  height: 56px;
+  min-height: 56px;
 }
 
 .card-total-list,
@@ -1404,6 +1443,27 @@ label {
   justify-content: space-between;
 }
 
+.modal-head-side {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.modal-meta {
+  background: var(--green-2);
+  border-radius: 999px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+  max-width: min(210px, 42vw);
+  overflow: hidden;
+  padding: 6px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .modal-actions {
   justify-content: flex-end;
   margin-top: 16px;
@@ -1526,11 +1586,12 @@ label {
 
   .analysis-pair .chart-row {
     gap: 8px;
-    grid-template-columns: minmax(58px, 0.45fr) minmax(0, 1fr);
+    grid-template-columns: 1fr;
   }
 
   .analysis-pair .legend {
     gap: 5px;
+    margin-top: 8px;
   }
 
   .analysis-pair .legend li {

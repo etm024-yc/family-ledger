@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=17" />
+    <link rel="stylesheet" href="./styles.css?v=1-final" />
   </head>
   <body>
     <div class="app-shell">
@@ -418,6 +418,7 @@
               <h2>데이터 관리</h2>
               <p>구글 공유 드라이브 동기화를 붙이기 전까지는 이 JSON 파일을 백업/공유용으로 사용할 수 있습니다.</p>
               <div class="form-actions">
+                <button class="primary-button" id="exportExcel" type="button">엑셀 내보내기</button>
                 <button class="ghost-button" id="exportData" type="button">내보내기</button>
                 <label class="file-button">
                   가져오기
@@ -465,7 +466,10 @@
       <form method="dialog" class="modal-card" id="modalForm">
         <div class="modal-head">
           <h2 id="modalTitle">내역 수정</h2>
-          <button class="icon-button" value="cancel" type="submit" title="닫기">×</button>
+          <div class="modal-head-side">
+            <span class="modal-meta" id="modalUserMeta"></span>
+            <button class="icon-button" value="cancel" type="submit" title="닫기">×</button>
+          </div>
         </div>
         <div class="modal-body" id="modalBody"></div>
         <div class="modal-actions">
@@ -553,6 +557,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=17"></script>
+    <script src="./app.js?v=1-final"></script>
   </body>
 </html>
