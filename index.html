@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=3-guide" />
+    <link rel="stylesheet" href="./styles.css?v=3-ai-sync" />
   </head>
   <body>
     <div class="app-shell">
@@ -124,10 +124,22 @@
 
         <section class="view" id="analysisView" aria-label="분석">
           <div class="analysis-header">
-            <h2>분석</h2>
+            <div class="analysis-title-row">
+              <h2>분석</h2>
+              <button class="ghost-button ai-analysis-button" id="aiAnalysisButton" type="button">AI 분석</button>
+            </div>
             <p id="analysisMonthLabel"></p>
           </div>
           <div class="analysis-grid">
+            <article class="analysis-panel ai-analysis-panel" id="aiAnalysisPanel" hidden>
+              <div class="panel-head">
+                <div>
+                  <h3>AI 분석 리포트</h3>
+                  <p class="panel-caption">외부 API 없이 기기 안의 입력 내역만 집계한 실험 분석입니다.</p>
+                </div>
+              </div>
+              <div class="ai-analysis-content" id="aiAnalysisContent"></div>
+            </article>
             <article class="analysis-panel delta-panel">
               <h3>이전 달 대비 변동사항</h3>
               <div class="delta-grid">
@@ -527,41 +539,30 @@
     <dialog class="modal" id="guideModal">
       <div class="modal-card guide-modal-card">
         <div class="modal-head">
-          <h2>우리집 가계부 가이드</h2>
+          <h2>우리집 가계부 가이드가 필요하신가요?</h2>
         </div>
-        <div class="guide-content">
-          <section>
-            <h3>처음 시작</h3>
-            <p>설정의 사용자 설정에서 현재 입력자를 선택합니다. 카드와 지역화폐는 선택한 사용자 기준으로 따로 관리되고, 지출/수입 내역은 함께 볼 수 있습니다.</p>
-          </section>
-          <section>
-            <h3>입력</h3>
-            <p>지출 또는 수입을 고르고 날짜, 분류, 금액, 정보, 예산 항목, 메모를 입력합니다. 자주 쓰는 내역은 퀵 입력으로 저장해 달력 날짜만 골라 빠르게 추가할 수 있습니다.</p>
-          </section>
-          <section>
-            <h3>달력</h3>
-            <p>날짜 칸을 누르면 그날의 내역이 팝업으로 열립니다. 일반 내역은 누르면 바로 수정할 수 있고, 고정 내역은 설정의 고정 내역 수정 화면으로 이동합니다.</p>
-          </section>
-          <section>
-            <h3>분석</h3>
-            <p>월별 지출 변화, 소비 카테고리, 카드 결제 대금, 지역화폐 잔액, 예산 항목 현황을 확인합니다. 카드, 카테고리, 예산, 지역화폐 항목을 누르면 해당 월 상세 내역이 열립니다.</p>
-          </section>
-          <section>
-            <h3>설정</h3>
-            <p>고정 내역, 월별 예산, 카드, 지역화폐, 카테고리, 사용자를 관리합니다. 목록 버튼은 저장된 항목을 보고 수정할 때, 추가 버튼은 새 항목을 입력할 때 사용합니다.</p>
-          </section>
-          <section>
-            <h3>백업과 동기화</h3>
-            <p>데이터 관리에서 JSON 백업과 엑셀 내보내기를 사용할 수 있습니다. 동기화 설정을 완료하면 앱 시작 시와 10분마다 공유 데이터가 자동으로 갱신됩니다.</p>
-          </section>
-        </div>
-        <div class="guide-actions">
-          <button class="ghost-button" id="guideToday" type="button">오늘은 그만 볼래요</button>
-          <button class="ghost-button" id="guideDone" type="button">이제 가이드가 없어도 돼요</button>
-          <button class="primary-button" id="guideStart" type="button">사용 시작</button>
+        <p class="guide-question-text">달력부터 입력, 분석, 설정까지 화면을 직접 짚어가며 설명해드릴게요.</p>
+        <div class="guide-actions guide-question-actions">
+          <button class="ghost-button" id="guideNo" type="button">아니오</button>
+          <button class="primary-button" id="guideYes" type="button">네</button>
         </div>
       </div>
     </dialog>
+
+    <div class="guide-tour" id="guideTour" hidden>
+      <div class="guide-tour-highlight" id="guideTourHighlight"></div>
+      <div class="guide-tour-arrow" id="guideTourArrow">▲</div>
+      <section class="guide-tour-card" id="guideTourCard" aria-live="polite">
+        <small id="guideTourStep">1 / 1</small>
+        <h3 id="guideTourTitle">가이드</h3>
+        <p id="guideTourText"></p>
+        <div class="guide-tour-actions">
+          <button class="ghost-button" id="guideTourPrev" type="button">이전</button>
+          <button class="ghost-button" id="guideTourExit" type="button">끝내기</button>
+          <button class="primary-button" id="guideTourNext" type="button">다음</button>
+        </div>
+      </section>
+    </div>
 
     <dialog class="modal" id="deleteConfirmModal">
       <div class="modal-card delete-confirm-card">
@@ -606,6 +607,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=3-guide"></script>
+    <script src="./app.js?v=3-ai-sync"></script>
   </body>
 </html>

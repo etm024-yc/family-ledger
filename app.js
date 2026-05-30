@@ -180,6 +180,8 @@ let syncTimer = null;
 let isApplyingRemote = false;
 let activeSettingsList = null;
 let deleteConfirmResolve = null;
+let guideStepIndex = 0;
+let activeGuideTarget = null;
 
 const els = {
   yearSelect: document.querySelector("#yearSelect"),
@@ -221,9 +223,18 @@ const els = {
   analysisDetailContent: document.querySelector("#analysisDetailContent"),
   closeAnalysisDetailModal: document.querySelector("#closeAnalysisDetailModal"),
   guideModal: document.querySelector("#guideModal"),
-  guideToday: document.querySelector("#guideToday"),
-  guideDone: document.querySelector("#guideDone"),
-  guideStart: document.querySelector("#guideStart"),
+  guideNo: document.querySelector("#guideNo"),
+  guideYes: document.querySelector("#guideYes"),
+  guideTour: document.querySelector("#guideTour"),
+  guideTourHighlight: document.querySelector("#guideTourHighlight"),
+  guideTourArrow: document.querySelector("#guideTourArrow"),
+  guideTourCard: document.querySelector("#guideTourCard"),
+  guideTourStep: document.querySelector("#guideTourStep"),
+  guideTourTitle: document.querySelector("#guideTourTitle"),
+  guideTourText: document.querySelector("#guideTourText"),
+  guideTourPrev: document.querySelector("#guideTourPrev"),
+  guideTourNext: document.querySelector("#guideTourNext"),
+  guideTourExit: document.querySelector("#guideTourExit"),
   deleteConfirmModal: document.querySelector("#deleteConfirmModal"),
   deleteConfirmMessage: document.querySelector("#deleteConfirmMessage"),
   cancelDeleteConfirm: document.querySelector("#cancelDeleteConfirm"),
@@ -239,6 +250,9 @@ const els = {
   closeDayModal: document.querySelector("#closeDayModal"),
   closeDayModalFooter: document.querySelector("#closeDayModalFooter"),
   analysisMonthLabel: document.querySelector("#analysisMonthLabel"),
+  aiAnalysisButton: document.querySelector("#aiAnalysisButton"),
+  aiAnalysisPanel: document.querySelector("#aiAnalysisPanel"),
+  aiAnalysisContent: document.querySelector("#aiAnalysisContent"),
   majorChart: document.querySelector("#majorChart"),
   majorLegend: document.querySelector("#majorLegend"),
   minorChart: document.querySelector("#minorChart"),
@@ -331,6 +345,117 @@ const els = {
   syncStatus: document.querySelector("#syncStatus"),
   syncLastSync: document.querySelector("#syncLastSync")
 };
+
+const guideSteps = [
+  {
+    view: "calendarView",
+    selector: ".month-picker",
+    title: "달력: 월 이동",
+    text: "상단의 이전/다음 버튼으로 달을 바꾸고, 연도와 월을 직접 선택할 수 있습니다."
+  },
+  {
+    view: "calendarView",
+    selector: ".summary-strip",
+    title: "달력: 월 합계",
+    text: "선택한 달의 지출과 수입 합계가 바로 보입니다. 잔액은 복잡해져서 숨겨두고 핵심만 보이게 했습니다."
+  },
+  {
+    view: "calendarView",
+    selector: "#calendarGrid",
+    title: "달력: 날짜 칸",
+    text: "날짜 칸을 누르면 그날 내역 목록이 뜹니다. 목록에서 일반 내역을 누르면 수정 화면으로 들어갑니다."
+  },
+  {
+    view: "calendarView",
+    selector: ".bottom-nav",
+    title: "하단 메뉴",
+    text: "달력, 입력, 분석, 설정은 하단 메뉴에서 이동합니다. 한 손으로 누르기 쉽게 아래에 고정했습니다."
+  },
+  {
+    view: "entryView",
+    selector: "#quickTemplateButton",
+    title: "입력: 퀵 입력",
+    text: "자주 쓰는 버스, 카페, 식비 같은 내역은 퀵 입력에서 날짜만 골라 빠르게 넣을 수 있습니다."
+  },
+  {
+    view: "entryView",
+    selector: "#entryForm .segmented",
+    title: "입력: 지출/수입 선택",
+    text: "지출과 수입 중 하나를 먼저 선택하면 그에 맞는 카테고리 목록이 바뀝니다."
+  },
+  {
+    view: "entryView",
+    selector: "#entryForm",
+    title: "입력: 내역 작성",
+    text: "날짜, 분류, 금액, 정보, 예산 항목, 메모를 입력합니다. 정보에는 카드, 현금, 계좌이체, 지역화폐 등이 들어갑니다."
+  },
+  {
+    view: "entryView",
+    selector: "#saveTemplate",
+    title: "입력: 퀵 입력 저장",
+    text: "현재 입력한 내용을 퀵 입력으로 저장합니다. 퀵 입력은 현재 선택된 사용자별로 따로 저장됩니다."
+  },
+  {
+    view: "analysisView",
+    selector: ".delta-panel",
+    title: "분석: 이전 달 대비",
+    text: "이번 달 지출과 수입이 이전 달보다 얼마나 늘었는지 가장 먼저 확인합니다."
+  },
+  {
+    view: "analysisView",
+    selector: "#aiAnalysisButton",
+    title: "분석: AI 분석",
+    text: "외부 API 없이 입력된 내역을 기기 안에서 집계해 소비 패턴, 예산 위험, 절약 포인트를 정리합니다."
+  },
+  {
+    view: "analysisView",
+    selector: ".analysis-pair",
+    title: "분석: 소비 카테고리",
+    text: "원형 그래프 아래 카테고리 금액을 누르면 해당 월의 상세 사용 내역이 열립니다."
+  },
+  {
+    view: "analysisView",
+    selector: "#cardTotalList",
+    title: "분석: 카드 결제 대금",
+    text: "현재 사용자 소유 카드만 보입니다. 특정 카드를 누르면 그 결제 대금에 포함된 사용 내역을 볼 수 있습니다."
+  },
+  {
+    view: "analysisView",
+    selector: ".local-currency-analysis-panel",
+    title: "분석: 지역화폐",
+    text: "지역화폐 잔액, 사용, 충전, 보너스, 지원금을 확인합니다. 영역을 누르면 사용과 충전 내역을 함께 볼 수 있습니다."
+  },
+  {
+    view: "analysisView",
+    selector: "#budgetAnalysisList",
+    title: "분석: 예산 항목",
+    text: "생활비, 식비, 용돈처럼 배정한 돈이 얼마나 남았는지 봅니다. 항목을 누르면 그 예산으로 쓴 내역이 열립니다."
+  },
+  {
+    view: "settingsView",
+    selector: ".fixed-settings-panel .settings-folder-head",
+    title: "설정: 목록과 추가",
+    text: "각 설정은 목록 버튼으로 저장된 항목을 보고, 추가 버튼으로 새 항목을 입력합니다."
+  },
+  {
+    view: "settingsView",
+    selector: ".user-settings-panel .settings-folder-head",
+    title: "설정: 사용자",
+    text: "영철, 경진처럼 입력자를 고릅니다. 카드와 퀵 입력, 지역화폐는 선택한 사용자 기준으로 따로 관리됩니다."
+  },
+  {
+    view: "settingsView",
+    selector: ".sync-panel .settings-folder-head",
+    title: "설정: 동기화",
+    text: "공유 사용을 위해 동기화 URL과 비밀번호를 저장합니다. 앱 시작 시와 10분마다 새 데이터를 불러옵니다."
+  },
+  {
+    view: "settingsView",
+    selector: ".data-panel .settings-folder-head",
+    title: "설정: 백업",
+    text: "데이터 관리는 JSON 백업과 엑셀 내보내기를 담당합니다. 배포 전후로 백업해두면 안전합니다."
+  }
+];
 
 init();
 
@@ -621,19 +746,28 @@ function bindEvents() {
   els.resetFixed.addEventListener("click", () => resetFixedForm());
   els.saveTemplate.addEventListener("click", saveCurrentTemplate);
   els.quickTemplateButton.addEventListener("click", openQuickTemplateModal);
+  els.aiAnalysisButton?.addEventListener("click", toggleAiAnalysis);
   els.closeQuickTemplateModal.addEventListener("click", () => els.quickTemplateModal.close());
   els.closeSettingsListModal.addEventListener("click", () => els.settingsListModal.close());
   els.settingsListModal.addEventListener("close", restoreSettingsListModal);
   els.closeAnalysisDetailModal.addEventListener("click", () => els.analysisDetailModal.close());
-  els.guideToday?.addEventListener("click", () => {
-    localStorage.setItem(GUIDE_TODAY_KEY, toDateKey(new Date()));
-    els.guideModal.close();
+  els.guideNo?.addEventListener("click", () => els.guideModal.close());
+  els.guideYes?.addEventListener("click", startGuideTour);
+  els.guideTourPrev?.addEventListener("click", () => showGuideStep(guideStepIndex - 1));
+  els.guideTourNext?.addEventListener("click", () => {
+    if (guideStepIndex >= guideSteps.length - 1) {
+      endGuideTour();
+      return;
+    }
+    showGuideStep(guideStepIndex + 1);
   });
-  els.guideDone?.addEventListener("click", () => {
-    localStorage.setItem(GUIDE_DONE_KEY, GUIDEBOOK_VERSION);
-    els.guideModal.close();
+  els.guideTourExit?.addEventListener("click", endGuideTour);
+  window.addEventListener("resize", () => {
+    if (!els.guideTour?.hidden) positionGuideStep();
   });
-  els.guideStart?.addEventListener("click", () => els.guideModal.close());
+  window.addEventListener("scroll", () => {
+    if (!els.guideTour?.hidden) positionGuideStep();
+  }, true);
   els.cancelDeleteConfirm.addEventListener("click", () => closeDeleteConfirm(false));
   els.confirmDeleteConfirm.addEventListener("click", () => closeDeleteConfirm(true));
   els.deleteConfirmModal.addEventListener("cancel", (event) => {
@@ -866,9 +1000,79 @@ function confirmDelete(message = "삭제하면 되돌릴 수 없습니다.") {
 
 function showGuideOnLaunch() {
   if (!els.guideModal || els.guideModal.open) return;
-  if (localStorage.getItem(GUIDE_DONE_KEY) === GUIDEBOOK_VERSION) return;
-  if (localStorage.getItem(GUIDE_TODAY_KEY) === toDateKey(new Date())) return;
   els.guideModal.showModal();
+}
+
+function startGuideTour() {
+  if (els.guideModal?.open) els.guideModal.close();
+  if (!els.guideTour) return;
+  els.guideTour.hidden = false;
+  document.body.classList.add("guide-tour-active");
+  showGuideStep(0);
+}
+
+function showGuideStep(index) {
+  if (!els.guideTour || els.guideTour.hidden) return;
+  guideStepIndex = Math.max(0, Math.min(index, guideSteps.length - 1));
+  const step = guideSteps[guideStepIndex];
+  if (step.view) showView(step.view, { skipStore: true });
+  closeSettingsListModalIfOpen();
+  if (els.analysisDetailModal?.open) els.analysisDetailModal.close();
+  if (els.dayModal?.open) els.dayModal.close();
+  if (els.quickTemplateModal?.open) els.quickTemplateModal.close();
+
+  els.guideTourStep.textContent = `${guideStepIndex + 1} / ${guideSteps.length}`;
+  els.guideTourTitle.textContent = step.title;
+  els.guideTourText.textContent = step.text;
+  els.guideTourPrev.disabled = guideStepIndex === 0;
+  els.guideTourNext.textContent = guideStepIndex === guideSteps.length - 1 ? "완료" : "다음";
+
+  window.setTimeout(positionGuideStep, 120);
+}
+
+function positionGuideStep() {
+  if (!els.guideTour || els.guideTour.hidden) return;
+  const step = guideSteps[guideStepIndex];
+  let target = document.querySelector(step.selector);
+  if (!target) target = document.querySelector(".bottom-nav") || document.body;
+
+  if (activeGuideTarget && activeGuideTarget !== target) activeGuideTarget.classList.remove("guide-target-active");
+  activeGuideTarget = target;
+  activeGuideTarget.classList.add("guide-target-active");
+  target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+
+  window.setTimeout(() => {
+    const rect = target.getBoundingClientRect();
+    const margin = 12;
+    const highlightPad = 6;
+    const cardWidth = Math.min(340, window.innerWidth - margin * 2);
+
+    els.guideTourHighlight.style.left = `${Math.max(margin, rect.left - highlightPad)}px`;
+    els.guideTourHighlight.style.top = `${Math.max(margin, rect.top - highlightPad)}px`;
+    els.guideTourHighlight.style.width = `${Math.min(window.innerWidth - margin * 2, rect.width + highlightPad * 2)}px`;
+    els.guideTourHighlight.style.height = `${rect.height + highlightPad * 2}px`;
+
+    els.guideTourCard.style.width = `${cardWidth}px`;
+    els.guideTourCard.style.left = `${Math.max(margin, Math.min(window.innerWidth - cardWidth - margin, rect.left + rect.width / 2 - cardWidth / 2))}px`;
+    els.guideTourCard.style.top = "0px";
+    const cardHeight = els.guideTourCard.offsetHeight;
+    const belowTop = rect.bottom + 22;
+    const canPlaceBelow = belowTop + cardHeight <= window.innerHeight - margin;
+    const top = canPlaceBelow ? belowTop : Math.max(margin, rect.top - cardHeight - 22);
+    els.guideTourCard.style.top = `${top}px`;
+
+    els.guideTourArrow.textContent = canPlaceBelow ? "▲" : "▼";
+    els.guideTourArrow.style.left = `${Math.max(margin, Math.min(window.innerWidth - margin - 24, rect.left + rect.width / 2 - 12))}px`;
+    els.guideTourArrow.style.top = `${canPlaceBelow ? rect.bottom + 2 : top + cardHeight - 2}px`;
+  }, 180);
+}
+
+function endGuideTour() {
+  if (!els.guideTour) return;
+  els.guideTour.hidden = true;
+  document.body.classList.remove("guide-tour-active");
+  if (activeGuideTarget) activeGuideTarget.classList.remove("guide-target-active");
+  activeGuideTarget = null;
 }
 
 function closeDeleteConfirm(result) {
@@ -1213,7 +1417,7 @@ async function pullSync({ quiet = false, onlyIfRemoteNewer = false } = {}) {
   const config = getSyncConfig();
   if (!config) {
     if (!quiet) updateSyncStatus("동기화 설정을 먼저 저장해 주세요.", "warning");
-    return;
+    return false;
   }
 
   try {
@@ -1224,21 +1428,23 @@ async function pullSync({ quiet = false, onlyIfRemoteNewer = false } = {}) {
     const remoteState = remote.state || remote.data;
     if (!remoteState) {
       if (!quiet) updateSyncStatus("아직 공유 데이터가 없습니다. 먼저 올리기를 눌러 주세요.", "neutral");
-      return;
+      return true;
     }
 
     const remoteUpdatedAt = remote.updatedAt || remoteState.updatedAt || "";
     const localUpdatedAt = state.updatedAt || "";
-    if (onlyIfRemoteNewer && localUpdatedAt && !isRemoteNewer(remoteUpdatedAt, localUpdatedAt)) return;
+    if (onlyIfRemoteNewer && localUpdatedAt && !isRemoteNewer(remoteUpdatedAt, localUpdatedAt)) return true;
     if (localUpdatedAt && isRemoteNewer(localUpdatedAt, remoteUpdatedAt)) {
       updateSyncStatus("이 기기의 데이터가 더 최신입니다. 올리기를 누르면 공유 데이터에 반영됩니다.", "warning");
-      return;
+      return true;
     }
 
     applyRemoteState(remoteState, remoteUpdatedAt);
     updateSyncStatus("공유 데이터를 불러왔습니다.", "success");
+    return true;
   } catch (error) {
     if (!quiet) updateSyncStatus(`불러오기 실패: ${error.message}`, "warning");
+    return false;
   }
 }
 
@@ -1246,7 +1452,7 @@ async function pushSync({ quiet = false } = {}) {
   const config = getSyncConfig();
   if (!config) {
     if (!quiet) updateSyncStatus("동기화 설정을 먼저 저장해 주세요.", "warning");
-    return;
+    return false;
   }
 
   try {
@@ -1263,9 +1469,30 @@ async function pushSync({ quiet = false } = {}) {
     localStorage.setItem(SYNC_LAST_KEY, new Date().toISOString());
     updateSyncStatus("공유 데이터에 올렸습니다.", "success");
     renderSyncSettings();
+    return true;
   } catch (error) {
     if (!quiet) updateSyncStatus(`올리기 실패: ${error.message}`, "warning");
+    return false;
   }
+}
+
+async function prepareInputSync() {
+  if (!getSyncConfig()) return true;
+  clearTimeout(syncTimer);
+  updateSyncStatus("입력 전 공유 데이터를 먼저 불러오는 중입니다...", "neutral");
+  const ok = await pullSync({ quiet: true, onlyIfRemoteNewer: true });
+  if (!ok) {
+    updateSyncStatus("불러오기 실패로 입력을 저장하지 않았습니다. 잠시 후 다시 시도해 주세요.", "warning");
+    alert("공유 데이터를 먼저 불러오지 못해서 입력을 저장하지 않았습니다. 인터넷 연결이나 동기화 설정을 확인한 뒤 다시 입력해 주세요.");
+    return false;
+  }
+  return true;
+}
+
+async function saveInputState() {
+  const shouldPush = Boolean(getSyncConfig());
+  saveState({ skipSync: shouldPush });
+  if (shouldPush) await pushSync({ quiet: true });
 }
 
 function loadRemoteSnapshot(config) {
@@ -1416,12 +1643,15 @@ function renderCalendar() {
   if (els.monthBalance) els.monthBalance.textContent = formatMoney(income - expense);
 }
 
-function openDayModal(dateKey) {
+async function openDayModal(dateKey) {
   if (pendingTemplate) {
-    addTemplateEntryForDate(pendingTemplate, dateKey);
-    pendingTemplate = null;
-    renderTemplatePickBanner();
-    showView("calendarView");
+    const template = pendingTemplate;
+    const saved = await addTemplateEntryForDate(template, dateKey);
+    if (saved) {
+      pendingTemplate = null;
+      renderTemplatePickBanner();
+      showView("calendarView");
+    }
     return;
   }
 
@@ -1462,12 +1692,15 @@ function renderDayModalEntries(entries) {
   });
 }
 
-function openEntryForDate(dateKey) {
+async function openEntryForDate(dateKey) {
   if (pendingTemplate) {
-    addTemplateEntryForDate(pendingTemplate, dateKey);
-    pendingTemplate = null;
-    renderTemplatePickBanner();
-    showView("calendarView");
+    const template = pendingTemplate;
+    const saved = await addTemplateEntryForDate(template, dateKey);
+    if (saved) {
+      pendingTemplate = null;
+      renderTemplatePickBanner();
+      showView("calendarView");
+    }
     return;
   }
   selectedDate = parseDate(dateKey);
@@ -1592,25 +1825,39 @@ function getBillableExpenseEntries(start, end) {
   });
 }
 
-function handleEntrySubmit(event) {
+async function handleEntrySubmit(event) {
   event.preventDefault();
   const payload = readEntryForm();
   if (!payload) return;
+  const submitter = event.submitter;
+  if (submitter) submitter.disabled = true;
 
-  if (els.editingEntryId.value) {
-    const id = els.editingEntryId.value;
-    state.entries = state.entries.map((entry) => (entry.id === id ? withEditedEntryMetadata(entry, payload) : entry));
-  } else {
-    state.entries.push(withNewEntryMetadata(payload));
+  try {
+    if (!(await prepareInputSync())) return;
+
+    if (els.editingEntryId.value) {
+      const id = els.editingEntryId.value;
+      const exists = state.entries.some((entry) => entry.id === id);
+      if (!exists) {
+        alert("공유 데이터를 불러오는 사이에 이 내역이 삭제되었거나 변경되었습니다. 다시 확인해 주세요.");
+        renderAll();
+        return;
+      }
+      state.entries = state.entries.map((entry) => (entry.id === id ? withEditedEntryMetadata(entry, payload) : entry));
+    } else {
+      state.entries.push(withNewEntryMetadata(payload));
+    }
+
+    selectedDate = parseDate(payload.date);
+    selectedYear = selectedDate.getFullYear();
+    selectedMonth = selectedDate.getMonth();
+    await saveInputState();
+    resetEntryForm(payload.date);
+    renderAll();
+    showView("calendarView");
+  } finally {
+    if (submitter) submitter.disabled = false;
   }
-
-  selectedDate = parseDate(payload.date);
-  selectedYear = selectedDate.getFullYear();
-  selectedMonth = selectedDate.getMonth();
-  saveState();
-  resetEntryForm(payload.date);
-  renderAll();
-  showView("calendarView");
 }
 
 function readEntryForm() {
@@ -1727,11 +1974,20 @@ async function handleModalSubmit(event) {
 
   if (action === "delete") {
     if (!(await confirmDelete("이 내역을 삭제하면 되돌릴 수 없습니다."))) return;
+    if (!(await prepareInputSync())) return;
     state.entries = state.entries.filter((entry) => entry.id !== id);
   }
 
   if (action === "save") {
     const formData = new FormData(els.modalForm);
+    if (!(await prepareInputSync())) return;
+    const exists = state.entries.some((entry) => entry.id === id);
+    if (!exists) {
+      alert("공유 데이터를 불러오는 사이에 이 내역이 삭제되었거나 변경되었습니다. 다시 확인해 주세요.");
+      els.entryModal.close();
+      renderAll();
+      return;
+    }
     state.entries = state.entries.map((entry) => {
       if (entry.id !== id) return entry;
       return withEditedEntryMetadata(entry, {
@@ -1746,14 +2002,15 @@ async function handleModalSubmit(event) {
     });
   }
 
-  saveState();
+  await saveInputState();
   els.entryModal.close();
   renderAll();
 }
 
-function saveCurrentTemplate() {
+async function saveCurrentTemplate() {
   const payload = readEntryForm();
   if (!payload) return;
+  if (!(await prepareInputSync())) return;
 
   if (editingTemplateId) {
     state.templates = state.templates.map((template) => (template.id === editingTemplateId ? { ...template, ...payload, id: template.id } : template));
@@ -1765,7 +2022,7 @@ function saveCurrentTemplate() {
     alert("퀵 입력 목록에 추가했습니다.");
   }
 
-  saveState();
+  await saveInputState();
   renderTemplates();
 }
 
@@ -1888,7 +2145,8 @@ async function deleteTemplate(templateId) {
   renderAll();
 }
 
-function addTemplateEntryForDate(template, date) {
+async function addTemplateEntryForDate(template, date) {
+  if (!(await prepareInputSync())) return false;
   const type = template.type === "income" ? "income" : "expense";
   state.entries.push({
     id: makeId(),
@@ -1907,26 +2165,41 @@ function addTemplateEntryForDate(template, date) {
   selectedDate = parseDate(date);
   selectedYear = selectedDate.getFullYear();
   selectedMonth = selectedDate.getMonth();
-  saveState();
+  await saveInputState();
   resetEntryForm(date);
   renderAll();
+  return true;
 }
 
-function handleFixedSubmit(event) {
+async function handleFixedSubmit(event) {
   event.preventDefault();
   const payload = readFixedForm();
   if (!payload) return;
   const id = els.fixedEditingId.value;
+  const submitter = event.submitter;
+  if (submitter) submitter.disabled = true;
 
-  if (id) {
-    state.entries = state.entries.map((entry) => (entry.id === id ? withEditedEntryMetadata(entry, payload) : entry));
-  } else {
-    state.entries.push(withNewEntryMetadata(payload));
+  try {
+    if (!(await prepareInputSync())) return;
+
+    if (id) {
+      const exists = state.entries.some((entry) => entry.id === id);
+      if (!exists) {
+        alert("공유 데이터를 불러오는 사이에 이 고정 내역이 삭제되었거나 변경되었습니다. 다시 확인해 주세요.");
+        renderAll();
+        return;
+      }
+      state.entries = state.entries.map((entry) => (entry.id === id ? withEditedEntryMetadata(entry, payload) : entry));
+    } else {
+      state.entries.push(withNewEntryMetadata(payload));
+    }
+
+    await saveInputState();
+    resetFixedForm();
+    renderAll();
+  } finally {
+    if (submitter) submitter.disabled = false;
   }
-
-  saveState();
-  resetFixedForm();
-  renderAll();
 }
 
 function readFixedForm() {
@@ -2100,6 +2373,216 @@ function renderAnalysis() {
   setDelta(els.incomeDelta, sumIncome(monthEntries) - sumIncome(previousEntries));
   renderLocalCurrencyAnalysis();
   renderBudgetAnalysis();
+  if (els.aiAnalysisPanel && !els.aiAnalysisPanel.hidden) renderAiAnalysis();
+}
+
+function toggleAiAnalysis() {
+  if (!els.aiAnalysisPanel) return;
+  const willOpen = els.aiAnalysisPanel.hidden;
+  els.aiAnalysisPanel.hidden = !willOpen;
+  els.aiAnalysisButton?.classList.toggle("active", willOpen);
+  if (willOpen) {
+    renderAiAnalysis();
+    els.aiAnalysisPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function renderAiAnalysis() {
+  if (!els.aiAnalysisContent) return;
+  const report = buildLocalAiAnalysis(selectedYear, selectedMonth);
+  els.aiAnalysisContent.innerHTML = "";
+
+  const summary = document.createElement("div");
+  summary.className = "ai-summary-grid";
+  summary.innerHTML = `
+    <div><span>이번 달 지출</span><strong>${formatMoney(report.totalExpense)}</strong></div>
+    <div><span>입력 건수</span><strong>${report.entryCount}건</strong></div>
+    <div><span>최근 3개월 평균</span><strong>${formatMoney(report.previousAverage)}</strong></div>
+  `;
+  els.aiAnalysisContent.append(summary);
+
+  const list = document.createElement("div");
+  list.className = "ai-insight-list";
+  report.insights.forEach((insight) => {
+    const item = document.createElement("article");
+    item.className = `ai-insight ${insight.tone || "neutral"}`;
+    item.innerHTML = `
+      <strong>${escapeHtml(insight.title)}</strong>
+      <p>${escapeHtml(insight.body)}</p>
+      ${insight.meta ? `<small>${escapeHtml(insight.meta)}</small>` : ""}
+    `;
+    list.append(item);
+  });
+  els.aiAnalysisContent.append(list);
+}
+
+function buildLocalAiAnalysis(year, month) {
+  const currentExpenses = getActualExpenseEntriesForMonth(year, month);
+  const previousDate = new Date(year, month - 1, 1);
+  const previousExpenses = getActualExpenseEntriesForMonth(previousDate.getFullYear(), previousDate.getMonth());
+  const previousMonths = [1, 2, 3].map((offset) => new Date(year, month - offset, 1));
+  const previousTotals = previousMonths.map((date) => sumConsumption(getActualExpenseEntriesForMonth(date.getFullYear(), date.getMonth())));
+  const monthsWithData = previousTotals.filter((value) => value > 0);
+  const previousAverage = monthsWithData.length ? Math.round(monthsWithData.reduce((sum, value) => sum + value, 0) / monthsWithData.length) : 0;
+  const totalExpense = sumConsumption(currentExpenses);
+  const previousTotal = sumConsumption(previousExpenses);
+  const insights = [];
+
+  if (!currentExpenses.length) {
+    insights.push({
+      tone: "neutral",
+      title: "이번 달 입력이 아직 부족해요",
+      body: "지출 내역이 쌓이면 많이 쓰는 카테고리, 반복되는 지출, 예산 위험 항목을 자동으로 짚어드릴게요.",
+      meta: "외부 API 없이 현재 기기에 저장된 데이터만 사용합니다."
+    });
+    return { totalExpense, previousAverage, entryCount: currentExpenses.length, insights };
+  }
+
+  if (previousTotal > 0) {
+    const diff = totalExpense - previousTotal;
+    const percent = Math.round(Math.abs(diff) / previousTotal * 100);
+    insights.push({
+      tone: diff > 0 ? "warning" : "good",
+      title: diff > 0 ? "지난달보다 지출 속도가 빨라졌어요" : "지난달보다 지출이 줄었어요",
+      body: `${month + 1}월 지출은 지난달보다 ${formatMoney(Math.abs(diff))} ${diff > 0 ? "늘었고" : "줄었고"}, 비율로는 약 ${percent}% 차이입니다.`,
+      meta: `지난달 ${formatMoney(previousTotal)} → 이번 달 ${formatMoney(totalExpense)}`
+    });
+  } else if (previousAverage > 0) {
+    const diff = totalExpense - previousAverage;
+    insights.push({
+      tone: diff > 0 ? "warning" : "good",
+      title: "최근 3개월 평균과 비교했어요",
+      body: `이번 달 지출은 최근 3개월 평균보다 ${formatMoney(Math.abs(diff))} ${diff > 0 ? "높습니다" : "낮습니다"}.`,
+      meta: `최근 3개월 평균 ${formatMoney(previousAverage)}`
+    });
+  }
+
+  const majorTotals = Object.entries(totalBy(currentExpenses, "major")).sort((a, b) => b[1] - a[1]);
+  const [topMajor, topMajorAmount] = majorTotals[0] || [];
+  if (topMajor) {
+    const share = totalExpense ? Math.round(topMajorAmount / totalExpense * 100) : 0;
+    const topMajorEntries = currentExpenses.filter((entry) => entry.major === topMajor);
+    const topMinor = Object.entries(totalBy(topMajorEntries, "minor")).sort((a, b) => b[1] - a[1])[0];
+    insights.push({
+      tone: share >= 45 ? "warning" : "neutral",
+      title: `${topMajor} 지출 비중이 가장 커요`,
+      body: `${topMajor}에 ${formatMoney(topMajorAmount)}을 사용해 이번 달 지출의 약 ${share}%를 차지합니다.${topMinor ? ` 그중 ${topMinor[0]}이 ${formatMoney(topMinor[1])}으로 가장 큽니다.` : ""}`,
+      meta: "분석 탭의 카테고리 금액을 누르면 상세 내역을 확인할 수 있어요."
+    });
+  }
+
+  const budgetInsights = getBudgetAiInsights(year, month);
+  insights.push(...budgetInsights);
+
+  const repeated = getRepeatedExpenseInsight(currentExpenses);
+  if (repeated) insights.push(repeated);
+
+  const savingTarget = getSavingTargetInsight(majorTotals, totalExpense);
+  if (savingTarget) insights.push(savingTarget);
+
+  const localCurrency = getLocalCurrencyMonthSummary(year, month, currentUser);
+  if (localCurrency.spent > 0 || localCurrency.charge > 0 || localCurrency.support > 0) {
+    insights.push({
+      tone: "neutral",
+      title: "지역화폐 흐름도 같이 봤어요",
+      body: `이번 달 지역화폐 사용은 ${formatMoney(localCurrency.spent)}, 충전은 ${formatMoney(localCurrency.charge)}, 지원금은 ${formatMoney(localCurrency.support)}입니다.`,
+      meta: `현재 잔액 ${formatMoney(localCurrency.balance)}`
+    });
+  }
+
+  if (currentExpenses.length < 10) {
+    insights.push({
+      tone: "neutral",
+      title: "데이터가 더 쌓이면 분석이 똑똑해져요",
+      body: "최소 2~3개월 이상 기록이 쌓이면 특정 요일, 특정 정보, 반복 메모 기준으로 더 안정적인 절약 포인트를 찾을 수 있습니다.",
+      meta: `현재 이번 달 지출 입력 ${currentExpenses.length}건`
+    });
+  }
+
+  return { totalExpense, previousAverage, entryCount: currentExpenses.length, insights: insights.slice(0, 7) };
+}
+
+function getActualExpenseEntriesForMonth(year, month) {
+  return getCountingEntries(getVisibleEntriesForMonth(year, month))
+    .filter((entry) => isSameMonth(entry.date, year, month))
+    .filter(isConsumptionEntry);
+}
+
+function getBudgetAiInsights(year, month) {
+  const key = monthKey(year, month);
+  const monthBudget = getMonthlyBudget(key);
+  const results = getBudgetBuckets()
+    .map((bucket) => {
+      const allocation = Number(monthBudget[bucket] || 0);
+      const carryover = getBudgetCarryover(year, month, bucket);
+      const available = allocation + carryover;
+      const spent = getBudgetUsageForMonth(year, month, bucket);
+      return { bucket, allocation, carryover, available, spent, remaining: available - spent };
+    })
+    .filter((item) => item.available > 0 || item.spent > 0);
+
+  const over = results.filter((item) => item.remaining < 0).sort((a, b) => a.remaining - b.remaining)[0];
+  if (over) {
+    return [{
+      tone: "danger",
+      title: `${over.bucket} 예산을 넘겼어요`,
+      body: `${over.bucket}는 사용 가능 금액 ${formatMoney(over.available)}보다 ${formatMoney(Math.abs(over.remaining))} 더 사용했습니다.`,
+      meta: `배정 ${formatMoney(over.allocation)} · 이월 ${formatMoney(over.carryover)} · 사용 ${formatMoney(over.spent)}`
+    }];
+  }
+
+  const near = results
+    .filter((item) => item.available > 0 && item.spent / item.available >= 0.8)
+    .sort((a, b) => b.spent / b.available - a.spent / a.available)[0];
+  if (near) {
+    return [{
+      tone: "warning",
+      title: `${near.bucket} 예산이 거의 다 찼어요`,
+      body: `${near.bucket}는 사용 가능 금액의 약 ${Math.round(near.spent / near.available * 100)}%를 사용했습니다. 남은 기간에는 이 항목을 먼저 조심하면 좋아요.`,
+      meta: `남은 돈 ${formatMoney(near.remaining)}`
+    }];
+  }
+
+  const best = results.filter((item) => item.available > 0 && item.remaining > 0).sort((a, b) => b.remaining - a.remaining)[0];
+  return best ? [{
+    tone: "good",
+    title: `${best.bucket} 예산은 여유가 있어요`,
+    body: `${best.bucket}는 아직 ${formatMoney(best.remaining)} 남았습니다. 이번 달 말까지 유지하면 다음 달로 이월되는 힘이 생깁니다.`,
+    meta: `사용 ${formatMoney(best.spent)} / 가능 ${formatMoney(best.available)}`
+  }] : [];
+}
+
+function getRepeatedExpenseInsight(entries) {
+  const groups = entries.reduce((acc, entry) => {
+    const key = `${entry.memo || "메모 없음"}|${entry.info || ""}`;
+    if (!acc[key]) acc[key] = { memo: entry.memo || "메모 없음", info: entry.info || "", count: 0, amount: 0 };
+    acc[key].count += 1;
+    acc[key].amount += Number(entry.amount || 0);
+    return acc;
+  }, {});
+  const repeated = Object.values(groups).filter((item) => item.count >= 2).sort((a, b) => b.amount - a.amount)[0];
+  if (!repeated) return null;
+  return {
+    tone: repeated.amount >= 50000 ? "warning" : "neutral",
+    title: "반복되는 지출이 보여요",
+    body: `${repeated.memo} 내역이 이번 달 ${repeated.count}번 반복되어 총 ${formatMoney(repeated.amount)} 사용됐습니다. 소액 반복 지출은 월 합계로 보면 꽤 커질 수 있어요.`,
+    meta: repeated.info ? `정보: ${repeated.info}` : ""
+  };
+}
+
+function getSavingTargetInsight(majorTotals, totalExpense) {
+  const fixedLike = new Set(["주거/통신", "세금/이자", "저축"]);
+  const target = majorTotals.find(([major, amount]) => amount > 0 && !fixedLike.has(major));
+  if (!target || !totalExpense) return null;
+  const [major, amount] = target;
+  const tenPercent = Math.round(amount * 0.1);
+  if (tenPercent <= 0) return null;
+  return {
+    tone: "good",
+    title: "저축을 늘릴 수 있는 현실적인 목표",
+    body: `${major}에서 10%만 줄이면 이번 달 기준 약 ${formatMoney(tenPercent)}을 추가로 남길 수 있습니다. 크게 줄이기보다 가장 큰 유동 지출 하나만 작게 줄이는 전략이 좋습니다.`,
+    meta: `${major} 현재 ${formatMoney(amount)}`
+  };
 }
 
 function renderLocalCurrencyAnalysis() {
@@ -2393,6 +2876,7 @@ function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRang
   const list = document.createElement("div");
   list.className = "analysis-detail-list";
   const templateColumns = getAnalysisDetailGrid(columns);
+  list.append(createAnalysisDetailHeader(columns, templateColumns));
   entries.forEach((entry) => list.append(createAnalysisDetailRow(entry, columns, templateColumns)));
   els.analysisDetailContent.append(list);
   els.analysisDetailModal.showModal();
@@ -2413,17 +2897,12 @@ function createAnalysisDetailHeader(columns, templateColumns) {
 function createAnalysisDetailRow(entry, columns, templateColumns) {
   const row = document.createElement("div");
   row.className = `analysis-detail-row${entry.detailTone ? ` analysis-detail-${entry.detailTone}` : ""}`;
-  row.style.setProperty("--analysis-detail-columns", templateColumns);
+  row.style.gridTemplateColumns = templateColumns;
   columns.forEach((column) => {
-    const cell = document.createElement("div");
+    const cell = document.createElement(column === "amount" ? "b" : "span");
     cell.className = `analysis-detail-cell analysis-detail-cell-${column}`;
-    const label = document.createElement("span");
-    label.className = "analysis-detail-cell-label";
-    label.textContent = analysisDetailColumnLabel(column);
-    const value = document.createElement(column === "amount" ? "strong" : "b");
-    value.className = "analysis-detail-cell-value";
-    value.textContent = analysisDetailValue(entry, column);
-    cell.append(label, value);
+    cell.textContent = analysisDetailValue(entry, column);
+    cell.title = cell.textContent;
     row.append(cell);
   });
   return row;
@@ -2458,8 +2937,16 @@ function analysisDetailValue(entry, column) {
 }
 
 function getAnalysisDetailGrid(columns) {
-  const count = columns.length <= 2 ? columns.length : columns.length <= 4 ? 2 : 3;
-  return `repeat(${count}, minmax(0, 1fr))`;
+  const sizes = {
+    date: "0.72fr",
+    kind: "0.6fr",
+    category: "1.45fr",
+    amount: "1.08fr",
+    info: "0.92fr",
+    memo: "1fr",
+    budget: "0.9fr"
+  };
+  return columns.map((column) => `minmax(0, ${sizes[column] || "1fr"})`).join(" ");
 }
 
 function getMonthRangeLabel(year, month) {
