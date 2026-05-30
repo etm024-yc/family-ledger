@@ -104,10 +104,19 @@ h3 {
 }
 
 .month-picker select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
   font-size: 18px;
   font-weight: 850;
   min-width: 0;
+  padding-inline: 6px;
   text-align: center;
+  text-align-last: center;
+}
+
+.month-picker select::-ms-expand {
+  display: none;
 }
 
 .topbar-action {
@@ -443,16 +452,18 @@ label span,
   font-size: 12px;
   font-weight: 900;
   gap: 4px;
-  justify-content: space-between;
+  justify-content: center;
   min-height: 22px;
   padding: 3px 5px;
+  text-align: center;
 }
 
-.day-total-row span,
 .day-total-row b {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 100%;
 }
 
 .day-total-row.expense {
@@ -463,6 +474,16 @@ label span,
 .day-total-row.income {
   background: var(--blue-2);
   color: var(--blue);
+}
+
+.day-total-row.fixed-expense {
+  background: var(--brown-2);
+  color: var(--brown);
+}
+
+.day-total-row.card-payment {
+  background: var(--purple-2);
+  color: var(--purple);
 }
 
 .day-modal-card {
@@ -2584,30 +2605,30 @@ body {
   .topbar {
     margin-bottom: 8px;
     padding: 6px;
-    gap: 5px;
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    gap: 4px;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
   }
 
   .month-picker {
-    gap: 4px;
-    grid-template-columns: 32px minmax(94px, 1.15fr) minmax(72px, 0.85fr) 32px;
-    padding: 5px;
+    gap: 3px;
+    grid-template-columns: 30px minmax(98px, 1.25fr) minmax(62px, 0.75fr) 30px;
+    padding: 4px;
   }
 
   .month-picker .icon-button {
     font-size: 18px;
-    height: 34px;
-    min-width: 32px;
+    height: 32px;
+    min-width: 30px;
   }
 
   .month-picker select {
-    font-size: 16px;
-    min-height: 34px;
-    padding: 4px 3px;
+    font-size: 17px;
+    min-height: 32px;
+    padding: 3px 1px;
   }
 
   .topbar-action {
-    height: 46px;
+    height: 44px;
     padding-inline: 0;
   }
 
@@ -2657,9 +2678,9 @@ body {
   }
 
   .day-total-row {
-    font-size: 10px;
+    font-size: 10.5px;
     min-height: 17px;
-    padding: 2px 3px;
+    padding: 2px 2px;
   }
 
   .day-add {

@@ -1929,13 +1929,17 @@ function renderCalendar() {
     }
 
     const countableEntries = getCountingEntries(cellEntries);
-    const dayExpense = sumExpense(countableEntries);
+    const dayExpense = sumConsumption(countableEntries);
+    const fixedExpense = sumFixedExpense(countableEntries);
     const dayIncome = sumIncome(countableEntries);
-    if (dayExpense || dayIncome) {
+    const cardPayment = sumCardPayments(cellEntries);
+    if (dayExpense || fixedExpense || dayIncome || cardPayment) {
       const totalList = document.createElement("div");
       totalList.className = "day-total-list";
-      if (dayExpense) totalList.append(createDayTotalRow("expense", "지출", dayExpense));
-      if (dayIncome) totalList.append(createDayTotalRow("income", "수입", dayIncome));
+      if (dayExpense) totalList.append(createDayTotalRow("expense", dayExpense));
+      if (fixedExpense) totalList.append(createDayTotalRow("fixed-expense", fixedExpense));
+      if (dayIncome) totalList.append(createDayTotalRow("income", dayIncome));
+      if (cardPayment) totalList.append(createDayTotalRow("card-payment", cardPayment));
       cell.append(totalList);
     }
 
@@ -1950,10 +1954,10 @@ function renderCalendar() {
   if (els.monthBalance) els.monthBalance.textContent = formatMoney(income - expense);
 }
 
-function createDayTotalRow(type, label, amount) {
+function createDayTotalRow(type, amount) {
   const row = document.createElement("div");
   row.className = `day-total-row ${type}`;
-  row.innerHTML = `<span>${label}</span><b>${formatCalendarTotalMoney(amount)}</b>`;
+  row.innerHTML = `<b>${formatCalendarTotalMoney(amount)}</b>`;
   return row;
 }
 
@@ -4380,8 +4384,20 @@ function sumConsumption(entries) {
   return entries.filter(isConsumptionEntry).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
 }
 
+function sumFixedExpense(entries) {
+  return entries
+    .filter((entry) => entry.type === "fixed-expense" || entry.syntheticType === "fixed-expense")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+}
+
 function sumIncome(entries) {
   return entries.filter(isIncomeEntry).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+}
+
+function sumCardPayments(entries) {
+  return entries
+    .filter((entry) => entry.isCardPayment || entry.type === "card-payment" || entry.syntheticType === "card-payment")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
 }
 
 function totalBy(items, key) {
