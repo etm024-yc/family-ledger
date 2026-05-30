@@ -8,6 +8,9 @@ const SYNC_LAST_KEY = "family-ledger-sync-last-v1";
 const GUIDE_TODAY_KEY = "family-ledger-guide-hidden-date-v1";
 const GUIDE_DONE_KEY = "family-ledger-guide-dismissed-version-v1";
 const SYNC_DEBOUNCE_MS = 1500;
+const SYNC_PULL_INTERVAL_MS = 5 * 60 * 1000;
+const SYNC_RECENT_PULL_MS = 45 * 1000;
+const SYNC_INPUT_WAIT_MS = 700;
 const APP_RELEASE_VERSION = "v3";
 const GUIDEBOOK_VERSION = "v3-guide-20260530";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -183,6 +186,9 @@ let deleteConfirmResolve = null;
 let guideStepIndex = 0;
 let activeGuideTarget = null;
 let activeGuideSteps = [];
+let backgroundPullPromise = null;
+let inputSyncQueue = Promise.resolve();
+let lastSuccessfulPullAt = 0;
 
 const els = {
   yearSelect: document.querySelector("#yearSelect"),
@@ -233,6 +239,7 @@ const els = {
   guideModal: document.querySelector("#guideModal"),
   guideNo: document.querySelector("#guideNo"),
   guideYes: document.querySelector("#guideYes"),
+  guideDisable: document.querySelector("#guideDisable"),
   guideTour: document.querySelector("#guideTour"),
   guideTourHighlight: document.querySelector("#guideTourHighlight"),
   guideTourArrow: document.querySelector("#guideTourArrow"),
@@ -468,7 +475,7 @@ const guideSteps = [
     view: "settingsView",
     selector: ".sync-panel .settings-folder-head",
     title: "설정: 동기화",
-    text: "공유 사용을 위해 동기화 URL과 비밀번호를 저장합니다. 앱 시작 시와 10분마다 새 데이터를 불러옵니다."
+    text: "공유 사용을 위해 동기화 URL과 비밀번호를 저장합니다. 앱 시작 시, 입력 시, 앱을 닫을 때, 5분마다 새 데이터를 확인합니다."
   },
   {
     view: "settingsView",
@@ -492,7 +499,15 @@ function init() {
   showView(loadActiveView(), { skipStore: true });
   registerServiceWorker();
   syncOnStart();
-  setInterval(() => pullSync({ quiet: true, onlyIfRemoteNewer: true }), 10 * 60 * 1000);
+  setInterval(() => queueBackgroundPull("periodic"), SYNC_PULL_INTERVAL_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      queueBackgroundPull("exit");
+    } else {
+      queueBackgroundPull("resume");
+    }
+  });
+  window.addEventListener("pagehide", () => queueBackgroundPull("exit"));
   setTimeout(showGuideOnLaunch, 500);
 }
 
@@ -522,12 +537,15 @@ function loadCurrentUser() {
 function normalizeState(raw) {
   const normalizedUsers = normalizeUsers(raw.users);
   const normalizedBudgetBuckets = normalizeBudgetBuckets(raw.budgetBuckets, raw.monthlyBudgets, raw.entries, raw.templates);
+  const normalizedCards = raw.cards?.length
+    ? normalizePrimaryCards(raw.cards.map((card) => normalizeCard(card, normalizedUsers)))
+    : normalizePrimaryCards(clone(defaultCards).map((card) => normalizeCard(card, normalizedUsers)));
   return {
     users: normalizedUsers,
     budgetBuckets: normalizedBudgetBuckets,
     categories: normalizeCategories(raw.categories),
     entries: (raw.entries || []).map((entry) => normalizeEntry(entry, normalizedUsers, normalizedBudgetBuckets)).filter(Boolean),
-    cards: raw.cards?.length ? raw.cards.map((card) => normalizeCard(card, normalizedUsers)) : clone(defaultCards).map((card) => normalizeCard(card, normalizedUsers)),
+    cards: normalizedCards,
     templates: raw.templates?.length ? raw.templates.map((template) => normalizeTemplate(template, normalizedUsers, normalizedBudgetBuckets)) : clone(defaultTemplates).map((template) => normalizeTemplate(template, normalizedUsers, normalizedBudgetBuckets)),
     monthlyBudgets: normalizeMonthlyBudgets(raw.monthlyBudgets, normalizedBudgetBuckets),
     localCurrency: normalizeLocalCurrency(raw.localCurrency, normalizedUsers),
@@ -659,8 +677,19 @@ function normalizeCard(card, userList = getUsers()) {
     name: card.name || "새 카드",
     owner: normalizeOwner(card.owner, userList),
     billingStartDay: clampDay(card.billingStartDay || 1),
-    paymentDay: clampDay(card.paymentDay || 25)
+    paymentDay: clampDay(card.paymentDay || 25),
+    primary: Boolean(card.primary)
   };
+}
+
+function normalizePrimaryCards(cards) {
+  const seen = new Set();
+  return cards.map((card) => {
+    if (!card.primary) return card;
+    if (seen.has(card.owner)) return { ...card, primary: false };
+    seen.add(card.owner);
+    return card;
+  });
 }
 
 function canonicalUser(user) {
@@ -740,7 +769,10 @@ function bindEvents() {
 
   els.navButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      if (button.dataset.view === "entryView") resetEntryForm(toDateKey(new Date()));
+      if (button.dataset.view === "entryView") {
+        resetEntryForm(toDateKey(new Date()));
+        queueBackgroundPull("entry");
+      }
       showView(button.dataset.view);
     });
   });
@@ -783,7 +815,8 @@ function bindEvents() {
   els.searchInput?.addEventListener("input", renderSearchResults);
   els.closeAnalysisDetailModal.addEventListener("click", () => els.analysisDetailModal.close());
   els.guideNo?.addEventListener("click", () => els.guideModal.close());
-  els.guideYes?.addEventListener("click", startGuideTour);
+  els.guideDisable?.addEventListener("click", disableGuideOnLaunch);
+  els.guideYes?.addEventListener("click", () => startGuideTour());
   els.currentGuideButton?.addEventListener("click", () => startGuideTour(getActiveViewId()));
   els.missingBudgetButton?.addEventListener("click", openMissingBudgetEntries);
   els.guideTourPrev?.addEventListener("click", () => showGuideStep(guideStepIndex - 1));
@@ -1146,7 +1179,13 @@ function confirmDelete(message = "삭제하면 되돌릴 수 없습니다.") {
 
 function showGuideOnLaunch() {
   if (!els.guideModal || els.guideModal.open) return;
+  if (localStorage.getItem(GUIDE_DONE_KEY) === "disabled") return;
   els.guideModal.showModal();
+}
+
+function disableGuideOnLaunch() {
+  localStorage.setItem(GUIDE_DONE_KEY, "disabled");
+  els.guideModal.close();
 }
 
 function startGuideTour(viewId = "") {
@@ -1532,7 +1571,18 @@ function scheduleSyncPush() {
 
 function syncOnStart() {
   if (!getSyncConfig()) return;
-  pullSync({ quiet: true, onlyIfRemoteNewer: true });
+  queueBackgroundPull("start");
+}
+
+function queueBackgroundPull(reason = "background") {
+  if (!getSyncConfig()) return Promise.resolve(false);
+  if (backgroundPullPromise) return backgroundPullPromise;
+  backgroundPullPromise = pullSync({ quiet: true, onlyIfRemoteNewer: true, reason })
+    .catch(() => false)
+    .finally(() => {
+      backgroundPullPromise = null;
+    });
+  return backgroundPullPromise;
 }
 
 async function syncNow({ quiet = false } = {}) {
@@ -1570,7 +1620,7 @@ async function syncNow({ quiet = false } = {}) {
   }
 }
 
-async function pullSync({ quiet = false, onlyIfRemoteNewer = false } = {}) {
+async function pullSync({ quiet = false, onlyIfRemoteNewer = false, reason = "" } = {}) {
   const config = getSyncConfig();
   if (!config) {
     if (!quiet) updateSyncStatus("동기화 설정을 먼저 저장해 주세요.", "warning");
@@ -1584,19 +1634,26 @@ async function pullSync({ quiet = false, onlyIfRemoteNewer = false } = {}) {
 
     const remoteState = remote.state || remote.data;
     if (!remoteState) {
+      lastSuccessfulPullAt = Date.now();
       if (!quiet) updateSyncStatus("아직 공유 데이터가 없습니다. 먼저 올리기를 눌러 주세요.", "neutral");
       return true;
     }
 
     const remoteUpdatedAt = remote.updatedAt || remoteState.updatedAt || "";
     const localUpdatedAt = state.updatedAt || "";
-    if (onlyIfRemoteNewer && localUpdatedAt && !isRemoteNewer(remoteUpdatedAt, localUpdatedAt)) return true;
+    if (onlyIfRemoteNewer && localUpdatedAt && !isRemoteNewer(remoteUpdatedAt, localUpdatedAt)) {
+      lastSuccessfulPullAt = Date.now();
+      if (reason === "start" || reason === "periodic" || reason === "resume") renderSyncSettings();
+      return true;
+    }
     if (localUpdatedAt && isRemoteNewer(localUpdatedAt, remoteUpdatedAt)) {
-      updateSyncStatus("이 기기의 데이터가 더 최신입니다. 올리기를 누르면 공유 데이터에 반영됩니다.", "warning");
+      lastSuccessfulPullAt = Date.now();
+      if (!quiet) updateSyncStatus("이 기기의 데이터가 더 최신입니다. 올리기를 누르면 공유 데이터에 반영됩니다.", "warning");
       return true;
     }
 
     applyRemoteState(remoteState, remoteUpdatedAt);
+    lastSuccessfulPullAt = Date.now();
     updateSyncStatus("공유 데이터를 불러왔습니다.", "success");
     return true;
   } catch (error) {
@@ -1636,20 +1693,121 @@ async function pushSync({ quiet = false } = {}) {
 async function prepareInputSync() {
   if (!getSyncConfig()) return true;
   clearTimeout(syncTimer);
-  updateSyncStatus("입력 전 공유 데이터를 먼저 불러오는 중입니다...", "neutral");
-  const ok = await pullSync({ quiet: true, onlyIfRemoteNewer: true });
-  if (!ok) {
-    updateSyncStatus("불러오기 실패로 입력을 저장하지 않았습니다. 잠시 후 다시 시도해 주세요.", "warning");
-    alert("공유 데이터를 먼저 불러오지 못해서 입력을 저장하지 않았습니다. 인터넷 연결이나 동기화 설정을 확인한 뒤 다시 입력해 주세요.");
-    return false;
+  updateSyncStatus("공유 데이터 확인 후 저장합니다. 화면은 바로 이어서 사용할 수 있습니다.", "neutral");
+  const pull = queueBackgroundPull("input");
+  if (Date.now() - lastSuccessfulPullAt > SYNC_RECENT_PULL_MS) {
+    await waitForSyncWindow(pull, SYNC_INPUT_WAIT_MS);
   }
   return true;
 }
 
-async function saveInputState() {
+async function saveInputState(options = {}) {
+  const { mergeRemote = true } = options;
   const shouldPush = Boolean(getSyncConfig());
   saveState({ skipSync: shouldPush });
-  if (shouldPush) await pushSync({ quiet: true });
+  if (shouldPush) queueInputSync({ mergeRemote });
+}
+
+function waitForSyncWindow(promise, timeoutMs) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs))
+  ]);
+}
+
+function queueInputSync({ mergeRemote = true } = {}) {
+  inputSyncQueue = inputSyncQueue
+    .catch(() => {})
+    .then(() => syncLocalChangesWithRemote({ mergeRemote }))
+    .catch((error) => {
+      updateSyncStatus(`자동 동기화 실패: ${error.message}`, "warning");
+    });
+  return inputSyncQueue;
+}
+
+async function syncLocalChangesWithRemote({ mergeRemote = true } = {}) {
+  const config = getSyncConfig();
+  if (!config) return false;
+  clearTimeout(syncTimer);
+  updateSyncStatus("입력 내용을 공유 데이터와 맞추는 중입니다...", "neutral");
+
+  if (mergeRemote) {
+    const localSnapshot = clone(state);
+    const remote = await loadRemoteSnapshot(config);
+    if (!remote.ok) throw new Error(remote.error || "공유 데이터를 읽지 못했습니다.");
+    const remoteState = remote.state || remote.data;
+    if (remoteState) {
+      state = mergeLedgerStates(localSnapshot, remoteState);
+      state.updatedAt = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      lastSuccessfulPullAt = Date.now();
+      renderAll();
+    }
+  }
+
+  return pushSync({ quiet: true });
+}
+
+function mergeLedgerStates(localRaw, remoteRaw) {
+  const users = unique([...(remoteRaw.users || defaultUsers), ...(localRaw.users || defaultUsers)].map(canonicalUser));
+  const budgetBuckets = unique([...(remoteRaw.budgetBuckets || defaultBudgetBuckets), ...(localRaw.budgetBuckets || defaultBudgetBuckets)]);
+  const remote = normalizeState({ ...remoteRaw, users, budgetBuckets });
+  const local = normalizeState({ ...localRaw, users, budgetBuckets });
+  return normalizeState({
+    users,
+    budgetBuckets,
+    categories: mergeNestedCategories(remote.categories, local.categories),
+    entries: mergeById(remote.entries, local.entries),
+    cards: mergeById(remote.cards, local.cards),
+    templates: mergeById(remote.templates, local.templates),
+    monthlyBudgets: mergeMonthlyBudgetMaps(remote.monthlyBudgets, local.monthlyBudgets),
+    localCurrency: mergeLocalCurrencyState(remote.localCurrency, local.localCurrency, users),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+function mergeNestedCategories(remoteCategories = {}, localCategories = {}) {
+  return {
+    expense: mergeCategoryMaps(remoteCategories.expense || {}, localCategories.expense || {}),
+    income: mergeCategoryMaps(remoteCategories.income || {}, localCategories.income || {})
+  };
+}
+
+function mergeById(remoteItems = [], localItems = []) {
+  const merged = new Map();
+  remoteItems.forEach((item) => merged.set(item.id, item));
+  localItems.forEach((item) => {
+    const previous = merged.get(item.id);
+    if (!previous || itemTimestamp(item) >= itemTimestamp(previous)) merged.set(item.id, item);
+  });
+  return [...merged.values()];
+}
+
+function itemTimestamp(item = {}) {
+  const timestamp = Date.parse(item.modifiedAt || item.createdAt || item.updatedAt || "");
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function mergeMonthlyBudgetMaps(remoteBudgets = {}, localBudgets = {}) {
+  const merged = clone(remoteBudgets || {});
+  Object.entries(localBudgets || {}).forEach(([key, values]) => {
+    merged[key] = { ...(merged[key] || {}), ...(values || {}) };
+  });
+  return merged;
+}
+
+function mergeLocalCurrencyState(remoteLocal = {}, localLocal = {}, users = getUsers()) {
+  const settings = {};
+  users.forEach((user) => {
+    settings[user] = {
+      ...(remoteLocal.settings?.[user] || {}),
+      ...(localLocal.settings?.[user] || {})
+    };
+  });
+  return {
+    settings,
+    transactions: mergeById(remoteLocal.transactions || [], localLocal.transactions || [])
+  };
 }
 
 function loadRemoteSnapshot(config) {
@@ -1770,23 +1928,15 @@ function renderCalendar() {
       cell.append(holidayBadge);
     }
 
-    cellEntries.slice(0, 4).forEach((entry) => {
-      const chip = document.createElement("button");
-      chip.className = `entry-chip ${entryClass(entry)}`;
-      chip.type = "button";
-      chip.innerHTML = `<span>${escapeHtml(entry.memo)}</span><b>${formatCompactMoney(entry.amount)}</b>`;
-      chip.addEventListener("click", (event) => {
-        event.stopPropagation();
-        openDayModal(key);
-      });
-      cell.append(chip);
-    });
-
-    if (cellEntries.length > 4) {
-      const more = document.createElement("div");
-      more.className = "more-chip";
-      more.textContent = `+${cellEntries.length - 4}개`;
-      cell.append(more);
+    const countableEntries = getCountingEntries(cellEntries);
+    const dayExpense = sumExpense(countableEntries);
+    const dayIncome = sumIncome(countableEntries);
+    if (dayExpense || dayIncome) {
+      const totalList = document.createElement("div");
+      totalList.className = "day-total-list";
+      if (dayExpense) totalList.append(createDayTotalRow("expense", "지출", dayExpense));
+      if (dayIncome) totalList.append(createDayTotalRow("income", "수입", dayIncome));
+      cell.append(totalList);
     }
 
     els.calendarGrid.append(cell);
@@ -1798,6 +1948,13 @@ function renderCalendar() {
   els.monthIncome.textContent = formatMoney(income);
   els.monthExpense.textContent = formatMoney(expense);
   if (els.monthBalance) els.monthBalance.textContent = formatMoney(income - expense);
+}
+
+function createDayTotalRow(type, label, amount) {
+  const row = document.createElement("div");
+  row.className = `day-total-row ${type}`;
+  row.innerHTML = `<span>${label}</span><b>${formatCalendarTotalMoney(amount)}</b>`;
+  return row;
 }
 
 async function openDayModal(dateKey) {
@@ -2054,7 +2211,7 @@ function resetEntryForm(date = toDateKey(new Date(selectedYear, selectedMonth, 1
   els.entryMemo.value = "";
   els.entryBudget.value = "";
   setEntryType(entryType === "income" ? "income" : "expense");
-  renderPaymentSelects();
+  renderPaymentSelects({ resetEntry: true });
   renderBudgetSelects();
 }
 
@@ -2160,7 +2317,7 @@ async function handleModalSubmit(event) {
     });
   }
 
-  await saveInputState();
+  await saveInputState({ mergeRemote: action !== "delete" });
   els.entryModal.close();
   renderAll();
 }
@@ -3398,6 +3555,12 @@ function renderCards() {
         <select class="card-payment-select" aria-label="카드 대금 결제일">${dayOptions(card.paymentDay)}</select>
       </label>
     `;
+    const primaryLabel = document.createElement("label");
+    primaryLabel.className = "primary-card-toggle";
+    primaryLabel.innerHTML = `
+      <input class="card-primary-input" type="checkbox" ${card.primary ? "checked" : ""} />
+      <span>주요 카드</span>
+    `;
     const deleteButton = document.createElement("button");
     deleteButton.className = "danger-button";
     deleteButton.type = "button";
@@ -3408,14 +3571,16 @@ function renderCards() {
       saveState();
       renderAll();
     });
-    row.append(deleteButton);
+    row.append(primaryLabel, deleteButton);
 
     const ownerSelect = row.querySelector(".card-owner-select");
     const nameInput = row.querySelector(".card-name-input");
     const startSelect = row.querySelector(".card-start-select");
     const paymentSelect = row.querySelector(".card-payment-select");
+    const primaryInput = row.querySelector(".card-primary-input");
     ownerSelect.addEventListener("change", () => {
       card.owner = ownerSelect.value;
+      state.cards = normalizePrimaryCards(state.cards);
       saveState();
       renderAll();
     });
@@ -3434,8 +3599,20 @@ function renderCards() {
       saveState();
       renderAll();
     });
+    primaryInput.addEventListener("change", () => setPrimaryCard(card.id, primaryInput.checked));
     els.cardSettings.append(row);
   });
+}
+
+function setPrimaryCard(cardId, checked) {
+  const target = state.cards.find((card) => card.id === cardId);
+  if (!target) return;
+  state.cards = state.cards.map((card) => {
+    if (card.owner !== target.owner) return card;
+    return { ...card, primary: checked && card.id === cardId };
+  });
+  saveState();
+  renderAll();
 }
 
 function resetCardForm() {
@@ -3463,8 +3640,10 @@ function handleCardSubmit(event) {
   renderAll();
 }
 
-function renderPaymentSelects() {
-  fillPaymentSelect(els.entryInfo, els.entryInfo.value || "현금");
+function renderPaymentSelects(options = {}) {
+  const { resetEntry = false } = options;
+  const currentEntryInfo = getPaymentOptions(currentUser).includes(els.entryInfo.value) ? els.entryInfo.value : "";
+  fillPaymentSelect(els.entryInfo, resetEntry ? getDefaultEntryPayment() : currentEntryInfo || getDefaultEntryPayment());
   fillPaymentSelect(els.fixedInfo, els.fixedInfo.value || "계좌이체");
 }
 
@@ -3491,7 +3670,7 @@ function fillBudgetSelect(select, selected = "") {
 }
 
 function fillPaymentSelect(select, selected) {
-  const options = unique([...state.cards.filter((card) => card.owner === currentUser).map((card) => card.name), "현금", "계좌이체", "교통카드", LOCAL_CURRENCY_PAYMENT]);
+  const options = getPaymentOptions(currentUser);
   if (selected && !options.includes(selected)) options.push(selected);
   select.innerHTML = "";
   options.forEach((name) => {
@@ -3501,6 +3680,14 @@ function fillPaymentSelect(select, selected) {
     select.append(option);
   });
   select.value = selected && options.includes(selected) ? selected : options[0];
+}
+
+function getPaymentOptions(owner = currentUser) {
+  return unique([...state.cards.filter((card) => card.owner === owner).map((card) => card.name), "현금", "계좌이체", "교통카드", LOCAL_CURRENCY_PAYMENT]);
+}
+
+function getDefaultEntryPayment(owner = currentUser) {
+  return state.cards.find((card) => card.owner === owner && card.primary)?.name || "현금";
 }
 
 function userOptions(selected) {
@@ -4353,6 +4540,15 @@ function formatDayTitle(dateKey) {
 function formatCompactMoney(value) {
   const number = Number(value || 0);
   if (number >= 1000000) return `${Math.round(number / 10000).toLocaleString("ko-KR")}만`;
+  return number.toLocaleString("ko-KR");
+}
+
+function formatCalendarTotalMoney(value) {
+  const number = Number(value || 0);
+  if (number >= 10000) {
+    const manwon = Math.round(number / 1000) / 10;
+    return `${manwon.toLocaleString("ko-KR")}만`;
+  }
   return number.toLocaleString("ko-KR");
 }
 

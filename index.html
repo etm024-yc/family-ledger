@@ -7,19 +7,19 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=3-search-report" />
+    <link rel="stylesheet" href="./styles.css?v=3-guide-primary-card" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <button class="topbar-action current-guide-button" id="currentGuideButton" type="button" title="현재 화면 가이드">가이드</button>
+        <button class="topbar-action current-guide-button" id="currentGuideButton" type="button" title="현재 화면 가이드" aria-label="현재 화면 가이드">?</button>
         <div class="month-picker" aria-label="월 선택">
           <button class="icon-button" id="prevMonth" type="button" title="이전 달">‹</button>
           <select id="yearSelect" aria-label="연도 선택"></select>
           <select id="monthSelect" aria-label="월 선택"></select>
           <button class="icon-button" id="nextMonth" type="button" title="다음 달">›</button>
         </div>
-        <button class="topbar-action search-button" id="searchButton" type="button" title="내역 검색">검색</button>
+        <button class="topbar-action search-button" id="searchButton" type="button" title="내역 검색" aria-label="내역 검색">🔍</button>
       </header>
 
       <nav class="bottom-nav" aria-label="주요 화면">
@@ -567,9 +567,11 @@
         </div>
         <p class="guide-question-text">달력부터 입력, 분석, 설정까지 화면을 직접 짚어가며 설명해드릴게요.</p>
         <div class="guide-actions guide-question-actions">
-          <button class="ghost-button" id="guideNo" type="button">아니오</button>
           <button class="primary-button" id="guideYes" type="button">네</button>
+          <button class="ghost-button" id="guideNo" type="button">아니오</button>
+          <button class="ghost-button" id="guideDisable" type="button">가이드 끄기</button>
         </div>
+        <small class="guide-disable-note">(가이드는 언제든 ? 버튼을 통해 보실 수 있습니다.)</small>
       </div>
     </dialog>
 
@@ -631,6 +633,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=3-search-report"></script>
+    <script src="./app.js?v=3-guide-primary-card"></script>
   </body>
 </html>

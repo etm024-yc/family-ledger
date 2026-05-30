@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-ledger-cache-v3-search-report";
+const CACHE_NAME = "family-ledger-cache-v3-guide-primary-card";
 const ASSETS = [
   "./",
   "./index.html",
