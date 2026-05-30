@@ -7,17 +7,19 @@
     <meta name="theme-color" content="#217c57" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=3-help-fix" />
+    <link rel="stylesheet" href="./styles.css?v=3-search-report" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
+        <button class="topbar-action current-guide-button" id="currentGuideButton" type="button" title="현재 화면 가이드">가이드</button>
         <div class="month-picker" aria-label="월 선택">
           <button class="icon-button" id="prevMonth" type="button" title="이전 달">‹</button>
           <select id="yearSelect" aria-label="연도 선택"></select>
           <select id="monthSelect" aria-label="월 선택"></select>
           <button class="icon-button" id="nextMonth" type="button" title="다음 달">›</button>
         </div>
+        <button class="topbar-action search-button" id="searchButton" type="button" title="내역 검색">검색</button>
       </header>
 
       <nav class="bottom-nav" aria-label="주요 화면">
@@ -41,9 +43,6 @@
 
       <main>
         <section class="view active" id="calendarView" aria-label="달력">
-          <div class="view-help-row">
-            <button class="help-button" data-guide-view="calendarView" type="button" title="달력 가이드">?</button>
-          </div>
           <div class="summary-strip">
             <div class="metric expense">
               <span>지출</span>
@@ -53,6 +52,10 @@
               <span>수입</span>
               <strong id="monthIncome">0원</strong>
             </div>
+            <button class="metric utility missing-budget-button" id="missingBudgetButton" type="button" title="예산 항목 미지정 지출 보기">
+              <span>미지정</span>
+              <strong>0건</strong>
+            </button>
           </div>
           <div class="template-pick-banner" id="templatePickBanner" hidden>
             <div>
@@ -65,9 +68,6 @@
         </section>
 
         <section class="view" id="entryView" aria-label="입력">
-          <div class="view-help-row">
-            <button class="help-button" data-guide-view="entryView" type="button" title="입력 가이드">?</button>
-          </div>
           <div class="entry-layout">
             <form class="entry-form" id="entryForm">
               <div class="form-header">
@@ -129,13 +129,13 @@
         </section>
 
         <section class="view" id="analysisView" aria-label="분석">
-          <div class="view-help-row">
-            <button class="help-button" data-guide-view="analysisView" type="button" title="분석 가이드">?</button>
-          </div>
           <div class="analysis-header">
             <div class="analysis-title-row">
               <h2>분석</h2>
-              <button class="ghost-button ai-analysis-button" id="aiAnalysisButton" type="button">AI 분석</button>
+              <div class="analysis-title-actions">
+                <button class="ghost-button ai-analysis-button" id="aiAnalysisButton" type="button">AI 분석</button>
+                <button class="ghost-button report-button" id="monthlyReportButton" type="button">PDF 저장</button>
+              </div>
             </div>
             <p id="analysisMonthLabel"></p>
           </div>
@@ -203,9 +203,6 @@
         </section>
 
         <section class="view" id="settingsView" aria-label="설정">
-          <div class="view-help-row">
-            <button class="help-button" data-guide-view="settingsView" type="button" title="설정 가이드">?</button>
-          </div>
           <div class="settings-grid">
             <article class="settings-panel fixed-settings-panel">
               <div class="panel-head fixed-settings-head">
@@ -538,6 +535,21 @@
       </div>
     </dialog>
 
+    <dialog class="modal" id="searchModal">
+      <div class="modal-card search-modal-card">
+        <div class="modal-head">
+          <h2>내역 검색</h2>
+          <button class="icon-button" id="closeSearchModal" type="button" title="닫기">×</button>
+        </div>
+        <label class="search-field">
+          <span>검색어</span>
+          <input id="searchInput" type="search" placeholder="메모, 정보, 카테고리, 금액 검색" autocomplete="off" />
+        </label>
+        <p class="search-caption">검색어 없이 열면 현재 보고 있는 달의 내역을 보여줍니다.</p>
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </dialog>
+
     <dialog class="modal" id="analysisDetailModal">
       <div class="modal-card analysis-detail-modal-card">
         <div class="modal-head">
@@ -619,6 +631,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=3-help-fix"></script>
+    <script src="./app.js?v=3-search-report"></script>
   </body>
 </html>

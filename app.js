@@ -189,6 +189,9 @@ const els = {
   monthSelect: document.querySelector("#monthSelect"),
   prevMonth: document.querySelector("#prevMonth"),
   nextMonth: document.querySelector("#nextMonth"),
+  missingBudgetButton: document.querySelector("#missingBudgetButton"),
+  currentGuideButton: document.querySelector("#currentGuideButton"),
+  searchButton: document.querySelector("#searchButton"),
   calendarGrid: document.querySelector("#calendarGrid"),
   templatePickBanner: document.querySelector("#templatePickBanner"),
   templatePickTitle: document.querySelector("#templatePickTitle"),
@@ -219,6 +222,10 @@ const els = {
   settingsListTitle: document.querySelector("#settingsListTitle"),
   settingsListContent: document.querySelector("#settingsListContent"),
   closeSettingsListModal: document.querySelector("#closeSettingsListModal"),
+  searchModal: document.querySelector("#searchModal"),
+  searchInput: document.querySelector("#searchInput"),
+  searchResults: document.querySelector("#searchResults"),
+  closeSearchModal: document.querySelector("#closeSearchModal"),
   analysisDetailModal: document.querySelector("#analysisDetailModal"),
   analysisDetailTitle: document.querySelector("#analysisDetailTitle"),
   analysisDetailContent: document.querySelector("#analysisDetailContent"),
@@ -252,6 +259,7 @@ const els = {
   closeDayModalFooter: document.querySelector("#closeDayModalFooter"),
   analysisMonthLabel: document.querySelector("#analysisMonthLabel"),
   aiAnalysisButton: document.querySelector("#aiAnalysisButton"),
+  monthlyReportButton: document.querySelector("#monthlyReportButton"),
   aiAnalysisPanel: document.querySelector("#aiAnalysisPanel"),
   aiAnalysisContent: document.querySelector("#aiAnalysisContent"),
   majorChart: document.querySelector("#majorChart"),
@@ -358,7 +366,13 @@ const guideSteps = [
     view: "calendarView",
     selector: ".summary-strip",
     title: "달력: 월 합계",
-    text: "선택한 달의 지출과 수입 합계가 바로 보입니다. 잔액은 복잡해져서 숨겨두고 핵심만 보이게 했습니다."
+    text: "선택한 달의 지출과 수입 합계가 바로 보입니다. 미지정 버튼을 누르면 예산 항목이 비어 있는 지출만 모아볼 수 있습니다."
+  },
+  {
+    view: "calendarView",
+    selector: "#searchButton",
+    title: "공통: 검색",
+    text: "메모, 정보, 카테고리, 금액으로 입력 내역을 찾아 바로 수정할 수 있습니다."
   },
   {
     view: "calendarView",
@@ -407,6 +421,12 @@ const guideSteps = [
     selector: "#aiAnalysisButton",
     title: "분석: AI 분석",
     text: "외부 API 없이 입력된 내역을 기기 안에서 집계해 소비 패턴, 예산 위험, 절약 포인트를 정리합니다."
+  },
+  {
+    view: "analysisView",
+    selector: "#monthlyReportButton",
+    title: "분석: 월별 리포트 저장",
+    text: "현재 보고 있는 달의 지출, 전월 대비, 예산 현황, 다음 달 소비 추천을 PDF로 저장합니다."
   },
   {
     view: "analysisView",
@@ -567,8 +587,14 @@ function normalizeEntry(entry, userList = getUsers(), bucketList = getBudgetBuck
     createdBy,
     modifiedBy: entry.modifiedBy ? normalizeOwner(entry.modifiedBy, userList) : "",
     budget: bucketList.includes(entry.budget) ? entry.budget : "",
-    startDate: type.startsWith("fixed-") ? entry.startDate || entry.date : entry.startDate
+    startDate: type.startsWith("fixed-") ? entry.startDate || entry.date : entry.startDate,
+    excludedMonths: type.startsWith("fixed-") ? normalizeExcludedMonths(entry.excludedMonths) : undefined
   };
+}
+
+function normalizeExcludedMonths(months) {
+  if (!Array.isArray(months)) return [];
+  return unique(months.map((value) => String(value || "").trim()).filter((value) => /^\d{4}-\d{2}$/.test(value)));
 }
 
 function normalizeTemplate(template, userList = getUsers(), bucketList = getBudgetBuckets()) {
@@ -748,15 +774,18 @@ function bindEvents() {
   els.saveTemplate.addEventListener("click", saveCurrentTemplate);
   els.quickTemplateButton.addEventListener("click", openQuickTemplateModal);
   els.aiAnalysisButton?.addEventListener("click", toggleAiAnalysis);
+  els.monthlyReportButton?.addEventListener("click", exportMonthlyReportPdf);
   els.closeQuickTemplateModal.addEventListener("click", () => els.quickTemplateModal.close());
   els.closeSettingsListModal.addEventListener("click", () => els.settingsListModal.close());
   els.settingsListModal.addEventListener("close", restoreSettingsListModal);
+  els.searchButton?.addEventListener("click", openSearchModal);
+  els.closeSearchModal?.addEventListener("click", () => els.searchModal.close());
+  els.searchInput?.addEventListener("input", renderSearchResults);
   els.closeAnalysisDetailModal.addEventListener("click", () => els.analysisDetailModal.close());
   els.guideNo?.addEventListener("click", () => els.guideModal.close());
   els.guideYes?.addEventListener("click", startGuideTour);
-  document.querySelectorAll("[data-guide-view]").forEach((button) => {
-    button.addEventListener("click", () => startGuideTour(button.dataset.guideView));
-  });
+  els.currentGuideButton?.addEventListener("click", () => startGuideTour(getActiveViewId()));
+  els.missingBudgetButton?.addEventListener("click", openMissingBudgetEntries);
   els.guideTourPrev?.addEventListener("click", () => showGuideStep(guideStepIndex - 1));
   els.guideTourNext?.addEventListener("click", () => {
     const steps = activeGuideSteps.length ? activeGuideSteps : guideSteps;
@@ -858,6 +887,117 @@ function setFixedType(type) {
   populateFixedCategorySelects();
 }
 
+function renderMissingBudgetButton() {
+  if (!els.missingBudgetButton) return;
+  const count = getMissingBudgetEntriesForMonth(selectedYear, selectedMonth).length;
+  els.missingBudgetButton.innerHTML = `<span>미지정</span><strong>${count}건</strong>`;
+  els.missingBudgetButton.setAttribute("aria-label", `${selectedYear}년 ${selectedMonth + 1}월 예산 항목 미지정 지출 ${count}건 보기`);
+  els.missingBudgetButton.classList.toggle("has-items", count > 0);
+}
+
+function openMissingBudgetEntries() {
+  const entries = getMissingBudgetEntriesForMonth(selectedYear, selectedMonth);
+  openAnalysisEntryDetail(
+    "예산 항목 미지정 지출",
+    entries,
+    ["date", "category", "amount", "info", "memo"],
+    getMonthRangeLabel(selectedYear, selectedMonth),
+    "",
+    { onEntrySelect: openEditableAnalysisEntry }
+  );
+}
+
+function getMissingBudgetEntriesForMonth(year, month) {
+  return getCountingEntries(getVisibleEntriesForMonth(year, month))
+    .filter((entry) => isSameMonth(entry.date, year, month))
+    .filter((entry) => isConsumptionEntry(entry) && !entry.budget)
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.memo || "").localeCompare(String(b.memo || "")));
+}
+
+function openSearchModal() {
+  if (!els.searchModal) return;
+  els.searchInput.value = "";
+  renderSearchResults();
+  els.searchModal.showModal();
+  requestAnimationFrame(() => els.searchInput.focus());
+}
+
+function renderSearchResults() {
+  if (!els.searchResults) return;
+  const query = els.searchInput.value.trim();
+  const entries = getSearchResults(query);
+  els.searchResults.innerHTML = "";
+
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = query ? "검색된 내역이 없습니다." : "현재 월에 표시할 내역이 없습니다.";
+    els.searchResults.append(empty);
+    return;
+  }
+
+  entries.slice(0, 80).forEach((entry) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `search-result-row ${entryClass(entry)}`;
+    row.innerHTML = `
+      <span>${escapeHtml(formatShortMonthDay(entry.date))}</span>
+      <div>
+        <strong>${escapeHtml(entry.memo || entry.minor || "내역")}</strong>
+        <small>${escapeHtml(typeLabels[entry.syntheticType || entry.type] || typeLabels[entry.type] || "")} · ${escapeHtml(entry.major || "-")} / ${escapeHtml(entry.minor || "-")} · ${escapeHtml(entry.info || "-")}${entry.budget ? ` · ${escapeHtml(entry.budget)}` : ""}</small>
+      </div>
+      <b>${formatMoney(entry.amount)}</b>
+    `;
+    row.addEventListener("click", () => {
+      els.searchModal.close();
+      openEditableAnalysisEntry(entry);
+    });
+    els.searchResults.append(row);
+  });
+
+  if (entries.length > 80) {
+    const more = document.createElement("p");
+    more.className = "search-caption";
+    more.textContent = `검색 결과가 많아 최근 80건만 보여줍니다. 검색어를 더 자세히 입력해 주세요.`;
+    els.searchResults.append(more);
+  }
+}
+
+function getSearchResults(query) {
+  const normalizedQuery = query.toLowerCase();
+  const currentMonthEntries = getCountingEntries(getVisibleEntriesForMonth(selectedYear, selectedMonth))
+    .filter((entry) => isSameMonth(entry.date, selectedYear, selectedMonth));
+  const allEditableEntries = [
+    ...state.entries.filter((entry) => !isFixedEntry(entry)),
+    ...state.entries.filter(isFixedEntry).flatMap((entry) => expandFixedEntry(entry, selectedYear, selectedMonth))
+  ].filter((entry) => !entry.isCardPayment && entry.type !== "card-payment");
+  const source = query ? allEditableEntries : currentMonthEntries;
+  const seen = new Set();
+  return source
+    .filter((entry) => {
+      const key = entry.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      if (!normalizedQuery) return true;
+      return getEntrySearchText(entry).includes(normalizedQuery);
+    })
+    .sort((a, b) => b.date.localeCompare(a.date) || String(a.memo || "").localeCompare(String(b.memo || "")));
+}
+
+function getEntrySearchText(entry) {
+  return [
+    entry.date,
+    entry.major,
+    entry.minor,
+    entry.amount,
+    entry.info,
+    entry.budget,
+    entry.memo,
+    entry.owner,
+    typeLabels[entry.syntheticType || entry.type]
+  ].join(" ").toLowerCase();
+}
+
 function categoryTypeFor(entryKind) {
   return entryKind.includes("income") ? "income" : "expense";
 }
@@ -940,6 +1080,7 @@ function renderAll() {
   renderTemplates();
   renderCategoryOptions();
   renderTemplatePickBanner();
+  renderMissingBudgetButton();
 }
 
 function setupSettingsFolders() {
@@ -1741,6 +1882,7 @@ function getVisibleEntriesForMonth(year, month) {
 }
 
 function expandFixedEntry(entry, year, month) {
+  if ((entry.excludedMonths || []).includes(monthKey(year, month))) return [];
   const monthStart = new Date(year, month, 1);
   const monthEnd = new Date(year, month + 1, 0);
   const start = parseDate(entry.startDate || entry.date);
@@ -2276,6 +2418,7 @@ function renderFixedEntries() {
   }
 
   fixedEntries.forEach((entry) => {
+    const excluded = (entry.excludedMonths || []).includes(monthKey(selectedYear, selectedMonth));
     const row = document.createElement("div");
     row.className = `fixed-card ${entry.type}`;
     row.innerHTML = `
@@ -2285,6 +2428,15 @@ function renderFixedEntries() {
         <small>${entry.startDate || entry.date} 시작 · ${repeatLabel(entry.repeat)}</small>
       </div>
     `;
+    const includeLabel = document.createElement("label");
+    includeLabel.className = "fixed-month-toggle";
+    includeLabel.innerHTML = `
+      <input type="checkbox" ${excluded ? "" : "checked"} />
+      <span>${selectedMonth + 1}월 포함</span>
+    `;
+    includeLabel.querySelector("input").addEventListener("change", (event) => {
+      toggleFixedMonthInclusion(entry.id, event.target.checked);
+    });
     const editButton = document.createElement("button");
     editButton.className = "ghost-button";
     editButton.type = "button";
@@ -2305,9 +2457,39 @@ function renderFixedEntries() {
       saveState();
       renderAll();
     });
-    row.append(editButton, deleteButton);
+    row.append(includeLabel, editButton, deleteButton);
     els.fixedList.append(row);
   });
+}
+
+async function toggleFixedMonthInclusion(id, included) {
+  if (!(await prepareInputSync())) {
+    renderAll();
+    return;
+  }
+
+  const entry = state.entries.find((item) => item.id === id);
+  if (!entry) {
+    alert("공유 데이터를 불러오는 사이에 이 고정 내역이 삭제되었거나 변경되었습니다.");
+    renderAll();
+    return;
+  }
+
+  const key = monthKey(selectedYear, selectedMonth);
+  const excludedMonths = new Set(entry.excludedMonths || []);
+  if (included) {
+    excludedMonths.delete(key);
+  } else {
+    excludedMonths.add(key);
+  }
+
+  state.entries = state.entries.map((item) => (
+    item.id === id
+      ? withEditedEntryMetadata(item, { excludedMonths: [...excludedMonths].sort() })
+      : item
+  ));
+  await saveInputState();
+  renderAll();
 }
 
 function editFixedEntry(id) {
@@ -2430,6 +2612,179 @@ function renderAiAnalysis() {
     list.append(item);
   });
   els.aiAnalysisContent.append(list);
+}
+
+function exportMonthlyReportPdf() {
+  const report = buildMonthlyReport(selectedYear, selectedMonth);
+  const reportWindow = window.open("", "_blank");
+  if (!reportWindow) {
+    alert("PDF 저장 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제한 뒤 다시 시도해 주세요.");
+    return;
+  }
+
+  reportWindow.document.write(buildMonthlyReportHtml(report));
+  reportWindow.document.close();
+  reportWindow.focus();
+  setTimeout(() => reportWindow.print(), 350);
+}
+
+function buildMonthlyReport(year, month) {
+  const monthEntries = getCountingEntries(getVisibleEntriesForMonth(year, month)).filter((entry) => isSameMonth(entry.date, year, month));
+  const previousDate = new Date(year, month - 1, 1);
+  const previousEntries = getCountingEntries(getVisibleEntriesForMonth(previousDate.getFullYear(), previousDate.getMonth()))
+    .filter((entry) => isSameMonth(entry.date, previousDate.getFullYear(), previousDate.getMonth()));
+  const expenses = monthEntries.filter(isConsumptionEntry);
+  const incomes = monthEntries.filter(isIncomeEntry);
+  const previousExpenses = previousEntries.filter(isConsumptionEntry);
+  const previousIncomes = previousEntries.filter(isIncomeEntry);
+  const majorTotals = Object.entries(totalBy(expenses, "major")).sort((a, b) => b[1] - a[1]);
+  const topMajor = majorTotals[0]?.[0] || "";
+  const minorTotals = topMajor ? Object.entries(totalBy(expenses.filter((entry) => entry.major === topMajor), "minor")).sort((a, b) => b[1] - a[1]) : [];
+  const budgets = getBudgetBuckets().map((bucket) => {
+    const key = monthKey(year, month);
+    const allocation = Number((state.monthlyBudgets[key] || {})[bucket] || 0);
+    const carryover = getBudgetCarryover(year, month, bucket);
+    const spent = getBudgetUsageForMonth(year, month, bucket);
+    return { bucket, allocation, carryover, spent, remaining: allocation + carryover - spent };
+  }).filter((item) => item.allocation || item.carryover || item.spent);
+  const cardTotals = state.cards
+    .filter((card) => card.owner === currentUser)
+    .map((card) => ({ name: card.name, total: getCardBillingTotal(card, year, month) }))
+    .filter((card) => card.total > 0);
+  const localCurrency = getLocalCurrencyMonthSummary(year, month, currentUser);
+  const aiReport = buildLocalAiAnalysis(year, month);
+  const missingBudgetEntries = getMissingBudgetEntriesForMonth(year, month);
+
+  return {
+    year,
+    month,
+    range: getMonthRangeLabel(year, month),
+    owner: currentUser,
+    totalExpense: sumConsumption(expenses),
+    totalIncome: sumIncome(incomes),
+    previousExpense: sumConsumption(previousExpenses),
+    previousIncome: sumIncome(previousIncomes),
+    entryCount: expenses.length + incomes.length,
+    majorTotals,
+    minorTotals,
+    budgets,
+    cardTotals,
+    localCurrency,
+    missingBudgetCount: missingBudgetEntries.length,
+    insights: aiReport.insights,
+    recommendations: buildReportRecommendations({ expenses, majorTotals, budgets, missingBudgetEntries, localCurrency, previousTotal: sumConsumption(previousExpenses), currentTotal: sumConsumption(expenses) })
+  };
+}
+
+function buildReportRecommendations(report) {
+  const recommendations = [];
+  const [topMajor, topMajorAmount] = report.majorTotals[0] || [];
+  if (topMajor && topMajorAmount > 0) {
+    recommendations.push(`${topMajor} 지출이 가장 큽니다. 다음 달에는 이 항목에서 10%만 줄여도 약 ${formatMoney(Math.round(topMajorAmount * 0.1))}을 더 남길 수 있어요.`);
+  }
+  const overBudget = report.budgets.filter((item) => item.remaining < 0).sort((a, b) => a.remaining - b.remaining)[0];
+  if (overBudget) {
+    recommendations.push(`${overBudget.bucket} 예산을 ${formatMoney(Math.abs(overBudget.remaining))} 초과했습니다. 다음 달 배정액을 현실화하거나 이 항목 사용 전에 잔액을 먼저 확인하는 흐름이 좋아요.`);
+  }
+  const nearBudget = report.budgets.filter((item) => item.remaining >= 0 && item.allocation + item.carryover > 0 && item.spent / (item.allocation + item.carryover) >= 0.8).sort((a, b) => b.spent - a.spent)[0];
+  if (!overBudget && nearBudget) {
+    recommendations.push(`${nearBudget.bucket}는 사용 가능 금액의 ${Math.round(nearBudget.spent / (nearBudget.allocation + nearBudget.carryover) * 100)}%를 사용했습니다. 다음 달 중순에 한 번 더 점검하면 초과를 막기 좋아요.`);
+  }
+  if (report.missingBudgetEntries.length) {
+    recommendations.push(`예산 항목 미지정 지출이 ${report.missingBudgetEntries.length}건 있습니다. 이 내역을 정리하면 생활비/식비/용돈별 남은 돈 계산이 더 정확해집니다.`);
+  }
+  if (report.localCurrency.balance > 0) {
+    recommendations.push(`지역화폐 잔액이 ${formatMoney(report.localCurrency.balance)} 남아 있습니다. 다음 달 식비나 생활비 중 사용 가능한 곳에 우선 배정하면 현금 지출을 줄일 수 있어요.`);
+  }
+  if (!recommendations.length) {
+    recommendations.push("이번 달은 큰 위험 신호가 적습니다. 다음 달에도 지출 입력 후 미지정 예산 항목만 빠르게 정리해 주세요.");
+  }
+  return recommendations;
+}
+
+function buildMonthlyReportHtml(report) {
+  const expenseDelta = report.totalExpense - report.previousExpense;
+  const incomeDelta = report.totalIncome - report.previousIncome;
+  return `<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>${report.year}년 ${report.month + 1}월 우리집 가계부 리포트</title>
+    <style>
+      @page { size: A4; margin: 14mm; }
+      * { box-sizing: border-box; }
+      body { color: #1d2a24; font-family: "Segoe UI", "Noto Sans KR", sans-serif; margin: 0; }
+      h1 { font-size: 24px; margin: 0 0 6px; }
+      h2 { border-bottom: 2px solid #d9e2dc; font-size: 16px; margin: 24px 0 10px; padding-bottom: 6px; }
+      p { color: #6d7d73; margin: 0 0 8px; }
+      .summary { display: grid; gap: 8px; grid-template-columns: repeat(4, 1fr); margin-top: 16px; }
+      .box { background: #f5f7f4; border: 1px solid #d9e2dc; border-radius: 8px; padding: 10px; }
+      .box span { color: #6d7d73; display: block; font-size: 11px; font-weight: 800; margin-bottom: 4px; }
+      .box strong { display: block; font-size: 16px; }
+      table { border-collapse: collapse; font-size: 11px; margin-top: 8px; width: 100%; }
+      th, td { border: 1px solid #d9e2dc; padding: 7px 8px; text-align: left; }
+      th { background: #edf3ee; }
+      td.amount, th.amount { text-align: right; white-space: nowrap; }
+      ul { margin: 8px 0 0; padding-left: 18px; }
+      li { margin-bottom: 6px; }
+      .muted { color: #6d7d73; }
+    </style>
+  </head>
+  <body>
+    <h1>${report.year}년 ${report.month + 1}월 우리집 가계부 리포트</h1>
+    <p>${escapeHtml(report.range)} · 현재 사용자 ${escapeHtml(report.owner)}</p>
+    <section class="summary">
+      <div class="box"><span>지출</span><strong>${formatMoney(report.totalExpense)}</strong></div>
+      <div class="box"><span>수입</span><strong>${formatMoney(report.totalIncome)}</strong></div>
+      <div class="box"><span>전월 대비 지출</span><strong>${formatSignedMoney(expenseDelta)}</strong></div>
+      <div class="box"><span>전월 대비 수입</span><strong>${formatSignedMoney(incomeDelta)}</strong></div>
+    </section>
+    ${buildReportTable("소비 카테고리", ["카테고리", "금액"], report.majorTotals.slice(0, 8).map(([label, amount]) => [label, amount]))}
+    ${buildReportTable("상위 대분류의 소분류", ["소분류", "금액"], report.minorTotals.slice(0, 8).map(([label, amount]) => [label, amount]))}
+    ${buildBudgetReportTable(report.budgets)}
+    ${buildReportTable("카드 결제 대금", ["카드", "금액"], report.cardTotals.map((item) => [item.name, item.total]))}
+    <h2>지역화폐</h2>
+    <p>잔액 ${formatMoney(report.localCurrency.balance)} · 사용 ${formatMoney(report.localCurrency.spent)} · 충전 ${formatMoney(report.localCurrency.charge)} · 보너스 ${formatMoney(report.localCurrency.bonus)} · 지원 ${formatMoney(report.localCurrency.support)}</p>
+    <h2>자동 분석</h2>
+    <ul>${report.insights.map((insight) => `<li><strong>${escapeHtml(insight.title)}</strong><br><span class="muted">${escapeHtml(insight.body)}</span></li>`).join("")}</ul>
+    <h2>다음 달 소비 추천</h2>
+    <ul>${report.recommendations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+  </body>
+</html>`;
+}
+
+function buildReportTable(title, headers, rows) {
+  if (!rows.length) return `<h2>${escapeHtml(title)}</h2><p>표시할 내역이 없습니다.</p>`;
+  return `
+    <h2>${escapeHtml(title)}</h2>
+    <table>
+      <thead><tr>${headers.map((header, index) => `<th class="${index === 1 ? "amount" : ""}">${escapeHtml(header)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map((row) => `<tr><td>${escapeHtml(row[0])}</td><td class="amount">${formatMoney(row[1])}</td></tr>`).join("")}</tbody>
+    </table>
+  `;
+}
+
+function buildBudgetReportTable(budgets) {
+  if (!budgets.length) return `<h2>예산 항목 현황</h2><p>표시할 예산 항목이 없습니다.</p>`;
+  return `
+    <h2>예산 항목 현황</h2>
+    <table>
+      <thead><tr><th>예산 항목</th><th class="amount">배정</th><th class="amount">이월</th><th class="amount">사용</th><th class="amount">남은 돈</th></tr></thead>
+      <tbody>${budgets.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.bucket)}</td>
+          <td class="amount">${formatMoney(item.allocation)}</td>
+          <td class="amount">${formatMoney(item.carryover)}</td>
+          <td class="amount">${formatMoney(item.spent)}</td>
+          <td class="amount">${formatMoney(item.remaining)}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+  `;
+}
+
+function formatSignedMoney(value) {
+  return `${value >= 0 ? "+" : ""}${formatMoney(value)}`;
 }
 
 function buildLocalAiAnalysis(year, month) {
@@ -2867,7 +3222,7 @@ function renderPie(chart, legend, totals, onSelect) {
   });
 }
 
-function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRangeLabel(selectedYear, selectedMonth), summaryText = "") {
+function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRangeLabel(selectedYear, selectedMonth), summaryText = "", options = {}) {
   els.analysisDetailTitle.textContent = title;
   els.analysisDetailContent.innerHTML = "";
 
@@ -2893,7 +3248,7 @@ function openAnalysisEntryDetail(title, entries, columns, caption = getMonthRang
   list.className = "analysis-detail-list";
   const templateColumns = getAnalysisDetailGrid(columns);
   list.append(createAnalysisDetailHeader(columns, templateColumns));
-  entries.forEach((entry) => list.append(createAnalysisDetailRow(entry, columns, templateColumns)));
+  entries.forEach((entry) => list.append(createAnalysisDetailRow(entry, columns, templateColumns, options.onEntrySelect)));
   els.analysisDetailContent.append(list);
   els.analysisDetailModal.showModal();
 }
@@ -2910,10 +3265,27 @@ function createAnalysisDetailHeader(columns, templateColumns) {
   return row;
 }
 
-function createAnalysisDetailRow(entry, columns, templateColumns) {
+function createAnalysisDetailRow(entry, columns, templateColumns, onEntrySelect) {
   const row = document.createElement("div");
   row.className = `analysis-detail-row${entry.detailTone ? ` analysis-detail-${entry.detailTone}` : ""}`;
   row.style.gridTemplateColumns = templateColumns;
+  if (onEntrySelect) {
+    row.classList.add("clickable-row");
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `${entry.memo || entry.minor || "내역"} 수정하기`);
+    row.addEventListener("click", () => {
+      els.analysisDetailModal.close();
+      onEntrySelect(entry);
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        els.analysisDetailModal.close();
+        onEntrySelect(entry);
+      }
+    });
+  }
   columns.forEach((column) => {
     const cell = document.createElement(column === "amount" ? "b" : "span");
     cell.className = `analysis-detail-cell analysis-detail-cell-${column}`;
@@ -2922,6 +3294,11 @@ function createAnalysisDetailRow(entry, columns, templateColumns) {
     row.append(cell);
   });
   return row;
+}
+
+function openEditableAnalysisEntry(entry) {
+  if (!entry || entry.isCardPayment || entry.type === "card-payment") return;
+  openEntryModal(entry);
 }
 
 function analysisDetailColumnLabel(column) {
@@ -3770,6 +4147,10 @@ function showView(viewId, options = {}) {
   els.views.forEach((view) => view.classList.toggle("active", view.id === activeView));
   els.navButtons.forEach((button) => button.classList.toggle("active", button.dataset.view === activeView));
   if (activeView === "analysisView") renderAnalysis();
+}
+
+function getActiveViewId() {
+  return document.querySelector(".view.active")?.id || loadActiveView();
 }
 
 function getCountingEntries(entries) {
